@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Spell Casting Game</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .game-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        canvas {
+            border: 2px solid #333;
+        }
+        
+        .instructions {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .title {
+            color: #4169E1;
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        
+        .instruction-text {
+            color: #666;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="title">Spell Casting Game</div>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div class="instructions">
+            <div style="color: #4169E1; font-weight: bold; margin-bottom: 10px;">
+                You are the BLUE wizard!
+            </div>
+            <div class="instruction-text">
+                • Hold left mouse button to move your character<br>
+                • Click on the red enemy to target/untarget them (targeting persists while moving)<br>
+                • Press R to cast Magic Arrow while moving (costs 20 mana)<br>
+                • Use walls and houses for cover!<br>
+                • You can move and cast spells at the same time!
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const GAME_WIDTH = 800;
+        const GAME_HEIGHT = 600;
+        const PLAYER_SIZE = 20;
+        const PLAYER_SPEED = 3;
+
+        // Game objects
+        const walls = [
+            { x: 200, y: 100, width: 20, height: 200 },
+            { x: 500, y: 300, width: 200, height: 20 },
+        ];
+
+        const houses = [
+            { x: 100, y: 100, width: 60, height: 60 },
+            { x: 600, y: 400, width: 80, height: 80 },
+        ];
+
+        const trees = [
+            { x: 300, y: 150, radius: 15 },
+            { x: 450, y: 250, radius: 15 },
+            { x: 150, y: 450, radius: 15 },
+        ];
+
+        const roads = [
+            { x: 0, y: 200, width: GAME_WIDTH, height: 40 },
+            { x: 400, y: 0, width: 40, height: GAME_HEIGHT },
+        ];
+
+        // Game state
+        const game = {
+            player: { x: 50, y: 50, health: 100, mana: 100 },
+            npc: { x: 700, y: 500, health: 100, mana: 100 },
+            selectedTarget: null,
+            spells: [],
+            isMoving: false,
+            mousePos: { x: 0, y: 0 }
+        };
+
+        // Canvas setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function isLineOfSightBlocked(start, end) {
+            for (const wall of walls) {
+                const x1 = start.x;
+                const y1 = start.y;
+                const x2 = end.x;
+                const y2 = end.y;
+                
+                const left = wall.x;
+                const right = wall.x + wall.width;
+                const top = wall.y;
+                const bottom = wall.y + wall.height;
+                
+                const m = (y2 - y1) / (x2 - x1);
+                const b = y1 - m * x1;
+                
+                const yAtLeft = m * left + b;
+                const yAtRight = m * right + b;
+                
+                if ((yAtLeft >= top && yAtLeft <= bottom) || 
+                    (yAtRight >= top && yAtRight <= bottom)) {
+                    return true;
+                }
+            }
+            
+            for (const house of houses) {
+                const left = house.x;
+                const right = house.x + house.width;
+                const top = house.y;
+                const bottom = house.y + house.height;
+                
+                const m = (end.y - start.y) / (end.x - start.x);
+                const b = start.y - m * start.x;
+                
+                const yAtLeft = m * left + b;
+                const yAtRight = m * right + b;
+                
+                if ((yAtLeft >= top && yAtLeft <= bottom) || 
+                    (yAtRight >= top && yAtRight <= bottom)) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
+        function movePlayer() {
+            if (game.isMoving) {
+                const dx = game.mousePos.x - game.player.x;
+                const dy = game.mousePos.y - game.player.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > PLAYER_SPEED) {
+                    const angle = Math.atan2(dy, dx);
+                    const newX = game.player.x + Math.cos(angle) * PLAYER_SPEED;
+                    const newY = game.player.y + Math.sin(angle) * PLAYER_SPEED;
+                    
+                    let canMove = true;
+                    const newPlayerBounds = {
+                        left: newX - PLAYER_SIZE,
+                        right: newX + PLAYER_SIZE,
+                        top: newY - PLAYER_SIZE,
+                        bottom: newY + PLAYER_SIZE
+                    };
+
+                    // Check walls
+                    for (const wall of walls) {
+                        if (newPlayerBounds.right > wall.x && 
+                            newPlayerBounds.left < wall.x + wall.width &&
+                            newPlayerBounds.bottom > wall.y && 
+                            newPlayerBounds.top < wall.y + wall.height) {
+                            canMove = false;
+                            break;
+                        }
+                    }
+
+                    // Check houses
+                    for (const house of houses) {
+                        if (newPlayerBounds.right > house.x && 
+                            newPlayerBounds.left < house.x + house.width &&
+                            newPlayerBounds.bottom > house.y && 
+                            newPlayerBounds.top < house.y + house.height) {
+                            canMove = false;
+                            break;
+                        }
+                    }
+
+                    // Check game bounds
+                    if (newX - PLAYER_SIZE < 0 || newX + PLAYER_SIZE > GAME_WIDTH ||
+                        newY - PLAYER_SIZE < 0 || newY + PLAYER_SIZE > GAME_HEIGHT) {
+                        canMove = false;
+                    }
+
+                    if (canMove) {
+                        game.player.x = newX;
+                        game.player.y = newY;
+                    }
+                }
+            }
+        }
+
+        function drawGame() {
+            // Clear canvas
+            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+            
+            // Draw roads
+            ctx.fillStyle = '#A9A9A9';
+            roads.forEach(road => {
+                ctx.fillRect(road.x, road.y, road.width, road.height);
+            });
+            
+            // Draw walls
+            ctx.fillStyle = '#666';
+            walls.forEach(wall => {
+                ctx.fillRect(wall.x, wall.y, wall.width, wall.height);
+            });
+            
+            // Draw houses
+            ctx.fillStyle = '#8B4513';
+            houses.forEach(house => {
+                ctx.fillRect(house.x, house.y, house.width, house.height);
+            });
+            
+            // Draw trees
+            ctx.fillStyle = '#228B22';
+            trees.forEach(tree => {
+                ctx.beginPath();
+                ctx.arc(tree.x, tree.y, tree.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            // Draw player (YOU)
+            ctx.fillStyle = '#4169E1';
+            ctx.beginPath();
+            ctx.arc(game.player.x, game.player.y, PLAYER_SIZE, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Add "YOU" indicator
+            ctx.fillStyle = '#FFF';
+            ctx.strokeStyle = '#000';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('YOU', game.player.x, game.player.y - 35);
+            ctx.strokeText('YOU', game.player.x, game.player.y - 35);
+            
+            // Add wizard robe design
+            ctx.strokeStyle = '#1E90FF';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(game.player.x, game.player.y, PLAYER_SIZE - 4, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Draw Enemy NPC
+            ctx.fillStyle = game.selectedTarget ? '#FF4444' : '#8B0000';
+            ctx.beginPath();
+            ctx.arc(game.npc.x, game.npc.y, PLAYER_SIZE, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Add "ENEMY" indicator
+            ctx.fillText('ENEMY', game.npc.x, game.npc.y - 35);
+            ctx.strokeText('ENEMY', game.npc.x, game.npc.y - 35);
+            
+            // Add evil wizard design
+            ctx.strokeStyle = '#8B0000';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(game.npc.x - PLAYER_SIZE/2, game.npc.y + PLAYER_SIZE/2);
+            ctx.lineTo(game.npc.x + PLAYER_SIZE/2, game.npc.y - PLAYER_SIZE/2);
+            ctx.stroke();
+            
+            // Draw health and mana bars
+            function drawBars(x, y, health, mana) {
+                // Health bar
+                ctx.fillStyle = '#0F0';
+                ctx.fillRect(x - 25, y - 30, (health / 100) * 50, 5);
+                ctx.strokeStyle = '#000';
+                ctx.strokeRect(x - 25, y - 30, 50, 5);
+                
+                // Mana bar
+                ctx.fillStyle = '#00F';
+                ctx.fillRect(x - 25, y - 25, (mana / 100) * 50, 5);
+                ctx.strokeRect(x - 25, y - 25, 50, 5);
+            }
+            
+            drawBars(game.player.x, game.player.y, game.player.health, game.player.mana);
+            drawBars(game.npc.x, game.npc.y, game.npc.health, game.npc.mana);
+            
+            // Update and draw spells
+            const currentTime = Date.now();
+            game.spells = game.spells.filter(spell => {
+                const age = currentTime - spell.createdAt;
+                if (age > 1000) return false;
+                
+                const progress = age / 1000;
+                const spellX = spell.x + (spell.targetX - spell.x) * progress;
+                const spellY = spell.y + (spell.targetY - spell.y) * progress;
+                
+                ctx.fillStyle = '#F90';
+                ctx.beginPath();
+                ctx.arc(spellX, spellY, 5, 0, Math.PI * 2);
+                ctx.fill();
+                
+                const dx = spellX - game.npc.x;
+                const dy = spellY - game.npc.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < PLAYER_SIZE) {
+                    game.npc.health = Math.max(0, game.npc.health - 20);
+                    return false;
+                }
+                
+                return true;
+            });
+        }
+
+        function gameLoop() {
+            movePlayer();
+            
+            // Regenerate health and mana
+            game.player.health = Math.min(100, game.player.health + 0.1);
+            game.player.mana = Math.min(100, game.player.mana + 0.2);
+            game.npc.health = Math.min(100, game.npc.health + 0.1);
+            game.npc.mana = Math.min(100, game.npc.mana + 0.2);
+            
+            drawGame();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Event handlers
+        // Add targeting indicator
+        function drawTargetingIndicator() {
+            if (game.selectedTarget) {
+                ctx.strokeStyle = '#FF0000';
+                ctx.lineWidth = 2;
+                const time = Date.now() * 0.003; // For animation
+                const size = PLAYER_SIZE + 5 + Math.sin(time) * 3; // Pulsing effect
+                
+                // Draw targeting circle
+                ctx.beginPath();
+                ctx.arc(game.selectedTarget.x, game.selectedTarget.y, size, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                // Draw crosshair
+                const crosshairSize = 10;
+                ctx.beginPath();
+                ctx.moveTo(game.selectedTarget.x - crosshairSize, game.selectedTarget.y);
+                ctx.lineTo(game.selectedTarget.x + crosshairSize, game.selectedTarget.y);
+                ctx.moveTo(game.selectedTarget.x, game.selectedTarget.y - crosshairSize);
+                ctx.lineTo(game.selectedTarget.x, game.selectedTarget.y + crosshairSize);
+                ctx.stroke();
+            }
+        }
+
+        // Update drawGame to include targeting indicator
+        const originalDrawGame = drawGame;
+        drawGame = function() {
+            originalDrawGame();
+            drawTargetingIndicator();
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const dx = x - game.npc.x;
+            const dy = y - game.npc.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < PLAYER_SIZE) {
+                // Toggle target selection
+                if (game.selectedTarget === game.npc) {
+                    game.selectedTarget = null;
+                } else {
+                    game.selectedTarget = game.npc;
+                }
+            }
+            // Always allow movement regardless of targeting
+            game.isMoving = true;
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            game.isMoving = false;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            game.mousePos.x = e.clientX - rect.left;
+            game.mousePos.y = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            game.isMoving = false;
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'r' && game.selectedTarget && game.player.mana >= 20) {
+                game.spells.push({
+                    x: game.player.x,
+                    y: game.player.y,
+                    targetX: game.selectedTarget.x,
+                    targetY: game.selectedTarget.y,
+                    type: 'magicArrow',
+                    createdAt: Date.now(),
+                });
+                game.player.mana -= 20;
+            }
+        });
+
+        // Start the game
+        gameLoop();
+    </script>
+</body>
+</html>
