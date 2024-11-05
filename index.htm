@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Spell Casting Game</title>
+    <title>Phaser Mage Game</title>
     <style>
         body {
             display: flex;
@@ -20,16 +20,13 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         
-        canvas {
-            border: 2px solid #333;
-        }
-        
         .instructions {
             margin-top: 20px;
             padding: 15px;
             background-color: #fff;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
         }
         
         .title {
@@ -44,11 +41,12 @@
             line-height: 1.5;
         }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
 </head>
 <body>
     <div class="game-container">
         <div class="title">Spell Casting Game</div>
-        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="gameCanvas"></div>
         <div class="instructions">
             <div style="color: #4169E1; font-weight: bold; margin-bottom: 10px;">
                 You are the BLUE wizard!
@@ -64,357 +62,304 @@
     </div>
 
     <script>
-        const GAME_WIDTH = 800;
-        const GAME_HEIGHT = 600;
-        const PLAYER_SIZE = 20;
-        const PLAYER_SPEED = 3;
-
-        // Game objects
-        const walls = [
-            { x: 200, y: 100, width: 20, height: 200 },
-            { x: 500, y: 300, width: 200, height: 20 },
-        ];
-
-        const houses = [
-            { x: 100, y: 100, width: 60, height: 60 },
-            { x: 600, y: 400, width: 80, height: 80 },
-        ];
-
-        const trees = [
-            { x: 300, y: 150, radius: 15 },
-            { x: 450, y: 250, radius: 15 },
-            { x: 150, y: 450, radius: 15 },
-        ];
-
-        const roads = [
-            { x: 0, y: 200, width: GAME_WIDTH, height: 40 },
-            { x: 400, y: 0, width: 40, height: GAME_HEIGHT },
-        ];
-
-        // Game state
-        const game = {
-            player: { x: 50, y: 50, health: 100, mana: 100 },
-            npc: { x: 700, y: 500, health: 100, mana: 100 },
-            selectedTarget: null,
-            spells: [],
-            isMoving: false,
-            mousePos: { x: 0, y: 0 }
-        };
-
-        // Canvas setup
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-
-        function isLineOfSightBlocked(start, end) {
-            for (const wall of walls) {
-                const x1 = start.x;
-                const y1 = start.y;
-                const x2 = end.x;
-                const y2 = end.y;
-                
-                const left = wall.x;
-                const right = wall.x + wall.width;
-                const top = wall.y;
-                const bottom = wall.y + wall.height;
-                
-                const m = (y2 - y1) / (x2 - x1);
-                const b = y1 - m * x1;
-                
-                const yAtLeft = m * left + b;
-                const yAtRight = m * right + b;
-                
-                if ((yAtLeft >= top && yAtLeft <= bottom) || 
-                    (yAtRight >= top && yAtRight <= bottom)) {
-                    return true;
-                }
-            }
-            
-            for (const house of houses) {
-                const left = house.x;
-                const right = house.x + house.width;
-                const top = house.y;
-                const bottom = house.y + house.height;
-                
-                const m = (end.y - start.y) / (end.x - start.x);
-                const b = start.y - m * start.x;
-                
-                const yAtLeft = m * left + b;
-                const yAtRight = m * right + b;
-                
-                if ((yAtLeft >= top && yAtLeft <= bottom) || 
-                    (yAtRight >= top && yAtRight <= bottom)) {
-                    return true;
-                }
-            }
-            
-            return false;
+    class MainScene extends Phaser.Scene {
+        constructor() {
+            super({ key: 'MainScene' });
         }
 
-        function movePlayer() {
-            if (game.isMoving) {
-                const dx = game.mousePos.x - game.player.x;
-                const dy = game.mousePos.y - game.player.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                
-                if (distance > PLAYER_SPEED) {
-                    const angle = Math.atan2(dy, dx);
-                    const newX = game.player.x + Math.cos(angle) * PLAYER_SPEED;
-                    const newY = game.player.y + Math.sin(angle) * PLAYER_SPEED;
-                    
-                    let canMove = true;
-                    const newPlayerBounds = {
-                        left: newX - PLAYER_SIZE,
-                        right: newX + PLAYER_SIZE,
-                        top: newY - PLAYER_SIZE,
-                        bottom: newY + PLAYER_SIZE
-                    };
-
-                    // Check walls
-                    for (const wall of walls) {
-                        if (newPlayerBounds.right > wall.x && 
-                            newPlayerBounds.left < wall.x + wall.width &&
-                            newPlayerBounds.bottom > wall.y && 
-                            newPlayerBounds.top < wall.y + wall.height) {
-                            canMove = false;
-                            break;
-                        }
-                    }
-
-                    // Check houses
-                    for (const house of houses) {
-                        if (newPlayerBounds.right > house.x && 
-                            newPlayerBounds.left < house.x + house.width &&
-                            newPlayerBounds.bottom > house.y && 
-                            newPlayerBounds.top < house.y + house.height) {
-                            canMove = false;
-                            break;
-                        }
-                    }
-
-                    // Check game bounds
-                    if (newX - PLAYER_SIZE < 0 || newX + PLAYER_SIZE > GAME_WIDTH ||
-                        newY - PLAYER_SIZE < 0 || newY + PLAYER_SIZE > GAME_HEIGHT) {
-                        canMove = false;
-                    }
-
-                    if (canMove) {
-                        game.player.x = newX;
-                        game.player.y = newY;
-                    }
-                }
-            }
+        init() {
+            this.GAME_WIDTH = 800;
+            this.GAME_HEIGHT = 600;
+            this.PLAYER_SIZE = 20;
+            this.PLAYER_SPEED = 180;
+            
+            this.playerStats = {
+                health: 100,
+                mana: 100
+            };
+            
+            this.enemyStats = {
+                health: 100,
+                mana: 100
+            };
+            
+            this.selectedTarget = null;
+            this.spells = [];
+            this.isMoving = false;
         }
 
-        function drawGame() {
-            // Clear canvas
-            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-            
-            // Draw roads
-            ctx.fillStyle = '#A9A9A9';
-            roads.forEach(road => {
-                ctx.fillRect(road.x, road.y, road.width, road.height);
+        preload() {
+            // No assets to preload for this version
+        }
+
+        create() {
+            // Create game objects
+            this.createWorld();
+            this.createPlayers();
+            this.createUI();
+            this.setupInput();
+        }
+
+        createWorld() {
+            // Create roads (background)
+            this.roads = this.add.group();
+            [
+                { x: 0, y: 200, width: this.GAME_WIDTH, height: 40 },
+                { x: 400, y: 0, width: 40, height: this.GAME_HEIGHT }
+            ].forEach(road => {
+                const roadRect = this.add.rectangle(road.x, road.y, road.width, road.height, 0xA9A9A9);
+                roadRect.setOrigin(0, 0);
+                this.roads.add(roadRect);
             });
-            
-            // Draw walls
-            ctx.fillStyle = '#666';
-            walls.forEach(wall => {
-                ctx.fillRect(wall.x, wall.y, wall.width, wall.height);
+
+            // Create walls
+            this.walls = this.physics.add.staticGroup();
+            [
+                { x: 200, y: 100, width: 20, height: 200 },
+                { x: 500, y: 300, width: 200, height: 20 }
+            ].forEach(wall => {
+                const wallRect = this.add.rectangle(wall.x, wall.y, wall.width, wall.height, 0x666666);
+                wallRect.setOrigin(0, 0);
+                this.physics.add.existing(wallRect, true);
+                this.walls.add(wallRect);
             });
-            
-            // Draw houses
-            ctx.fillStyle = '#8B4513';
-            houses.forEach(house => {
-                ctx.fillRect(house.x, house.y, house.width, house.height);
+
+            // Create houses
+            this.houses = this.physics.add.staticGroup();
+            [
+                { x: 100, y: 100, width: 60, height: 60 },
+                { x: 600, y: 400, width: 80, height: 80 }
+            ].forEach(house => {
+                const houseRect = this.add.rectangle(house.x, house.y, house.width, house.height, 0x8B4513);
+                houseRect.setOrigin(0, 0);
+                this.physics.add.existing(houseRect, true);
+                this.houses.add(houseRect);
             });
-            
-            // Draw trees
-            ctx.fillStyle = '#228B22';
-            trees.forEach(tree => {
-                ctx.beginPath();
-                ctx.arc(tree.x, tree.y, tree.radius, 0, Math.PI * 2);
-                ctx.fill();
-            });
-            
-            // Draw player (YOU)
-            ctx.fillStyle = '#4169E1';
-            ctx.beginPath();
-            ctx.arc(game.player.x, game.player.y, PLAYER_SIZE, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Add "YOU" indicator
-            ctx.fillStyle = '#FFF';
-            ctx.strokeStyle = '#000';
-            ctx.font = '12px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('YOU', game.player.x, game.player.y - 35);
-            ctx.strokeText('YOU', game.player.x, game.player.y - 35);
-            
-            // Add wizard robe design
-            ctx.strokeStyle = '#1E90FF';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(game.player.x, game.player.y, PLAYER_SIZE - 4, 0, Math.PI * 2);
-            ctx.stroke();
-            
-            // Draw Enemy NPC
-            ctx.fillStyle = game.selectedTarget ? '#FF4444' : '#8B0000';
-            ctx.beginPath();
-            ctx.arc(game.npc.x, game.npc.y, PLAYER_SIZE, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Add "ENEMY" indicator
-            ctx.fillText('ENEMY', game.npc.x, game.npc.y - 35);
-            ctx.strokeText('ENEMY', game.npc.x, game.npc.y - 35);
-            
-            // Add evil wizard design
-            ctx.strokeStyle = '#8B0000';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(game.npc.x - PLAYER_SIZE/2, game.npc.y + PLAYER_SIZE/2);
-            ctx.lineTo(game.npc.x + PLAYER_SIZE/2, game.npc.y - PLAYER_SIZE/2);
-            ctx.stroke();
-            
-            // Draw health and mana bars
-            function drawBars(x, y, health, mana) {
-                // Health bar
-                ctx.fillStyle = '#0F0';
-                ctx.fillRect(x - 25, y - 30, (health / 100) * 50, 5);
-                ctx.strokeStyle = '#000';
-                ctx.strokeRect(x - 25, y - 30, 50, 5);
-                
-                // Mana bar
-                ctx.fillStyle = '#00F';
-                ctx.fillRect(x - 25, y - 25, (mana / 100) * 50, 5);
-                ctx.strokeRect(x - 25, y - 25, 50, 5);
-            }
-            
-            drawBars(game.player.x, game.player.y, game.player.health, game.player.mana);
-            drawBars(game.npc.x, game.npc.y, game.npc.health, game.npc.mana);
-            
-            // Update and draw spells
-            const currentTime = Date.now();
-            game.spells = game.spells.filter(spell => {
-                const age = currentTime - spell.createdAt;
-                if (age > 1000) return false;
-                
-                const progress = age / 1000;
-                const spellX = spell.x + (spell.targetX - spell.x) * progress;
-                const spellY = spell.y + (spell.targetY - spell.y) * progress;
-                
-                ctx.fillStyle = '#F90';
-                ctx.beginPath();
-                ctx.arc(spellX, spellY, 5, 0, Math.PI * 2);
-                ctx.fill();
-                
-                const dx = spellX - game.npc.x;
-                const dy = spellY - game.npc.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                
-                if (distance < PLAYER_SIZE) {
-                    game.npc.health = Math.max(0, game.npc.health - 20);
-                    return false;
-                }
-                
-                return true;
+
+            // Create trees
+            this.trees = this.add.group();
+            [
+                { x: 300, y: 150 },
+                { x: 450, y: 250 },
+                { x: 150, y: 450 }
+            ].forEach(tree => {
+                const treeCircle = this.add.circle(tree.x, tree.y, 15, 0x228B22);
+                this.trees.add(treeCircle);
             });
         }
 
-        function gameLoop() {
-            movePlayer();
-            
-            // Regenerate health and mana
-            game.player.health = Math.min(100, game.player.health + 0.1);
-            game.player.mana = Math.min(100, game.player.mana + 0.2);
-            game.npc.health = Math.min(100, game.npc.health + 0.1);
-            game.npc.mana = Math.min(100, game.npc.mana + 0.2);
-            
-            drawGame();
-            requestAnimationFrame(gameLoop);
+        createPlayers() {
+            // Create player
+            this.player = this.add.circle(50, 50, this.PLAYER_SIZE, 0x4169E1);
+            this.physics.add.existing(this.player);
+            this.player.body.setCollideWorldBounds(true);
+
+            // Create enemy
+            this.enemy = this.add.circle(700, 500, this.PLAYER_SIZE, 0x8B0000);
+            this.physics.add.existing(this.enemy);
+            this.enemy.body.setCollideWorldBounds(true);
+
+            // Add collisions
+            this.physics.add.collider(this.player, this.walls);
+            this.physics.add.collider(this.player, this.houses);
+            this.physics.add.collider(this.enemy, this.walls);
+            this.physics.add.collider(this.enemy, this.houses);
         }
 
-        // Event handlers
-        // Add targeting indicator
-        function drawTargetingIndicator() {
-            if (game.selectedTarget) {
-                ctx.strokeStyle = '#FF0000';
-                ctx.lineWidth = 2;
-                const time = Date.now() * 0.003; // For animation
-                const size = PLAYER_SIZE + 5 + Math.sin(time) * 3; // Pulsing effect
-                
-                // Draw targeting circle
-                ctx.beginPath();
-                ctx.arc(game.selectedTarget.x, game.selectedTarget.y, size, 0, Math.PI * 2);
-                ctx.stroke();
-                
-                // Draw crosshair
-                const crosshairSize = 10;
-                ctx.beginPath();
-                ctx.moveTo(game.selectedTarget.x - crosshairSize, game.selectedTarget.y);
-                ctx.lineTo(game.selectedTarget.x + crosshairSize, game.selectedTarget.y);
-                ctx.moveTo(game.selectedTarget.x, game.selectedTarget.y - crosshairSize);
-                ctx.lineTo(game.selectedTarget.x, game.selectedTarget.y + crosshairSize);
-                ctx.stroke();
-            }
+        createUI() {
+            // Player label
+            this.add.text(this.player.x, this.player.y - 35, 'YOU', {
+                font: '12px Arial',
+                fill: '#000'
+            }).setOrigin(0.5);
+
+            // Enemy label
+            this.add.text(this.enemy.x, this.enemy.y - 35, 'ENEMY', {
+                font: '12px Arial',
+                fill: '#000'
+            }).setOrigin(0.5);
+
+            // Create health and mana bars
+            this.createStatusBars();
         }
 
-        // Update drawGame to include targeting indicator
-        const originalDrawGame = drawGame;
-        drawGame = function() {
-            originalDrawGame();
-            drawTargetingIndicator();
+        createStatusBars() {
+            // Player status bars container
+            this.playerBars = this.add.container(this.player.x, this.player.y - 30);
+            
+            // Player health bar
+            this.playerHealthBar = this.add.rectangle(-25, 0, 50, 5, 0x00FF00);
+            this.playerHealthBarBg = this.add.rectangle(-25, 0, 50, 5, 0x000000);
+            this.playerHealthBarBg.setStrokeStyle(1, 0x000000);
+            
+            // Player mana bar
+            this.playerManaBar = this.add.rectangle(-25, 5, 50, 5, 0x0000FF);
+            this.playerManaBarBg = this.add.rectangle(-25, 5, 50, 5, 0x000000);
+            this.playerManaBarBg.setStrokeStyle(1, 0x000000);
+            
+            this.playerBars.add([
+                this.playerHealthBarBg,
+                this.playerHealthBar,
+                this.playerManaBarBg,
+                this.playerManaBar
+            ]);
+
+            // Enemy status bars container
+            this.enemyBars = this.add.container(this.enemy.x, this.enemy.y - 30);
+            
+            // Enemy health bar
+            this.enemyHealthBar = this.add.rectangle(-25, 0, 50, 5, 0x00FF00);
+            this.enemyHealthBarBg = this.add.rectangle(-25, 0, 50, 5, 0x000000);
+            this.enemyHealthBarBg.setStrokeStyle(1, 0x000000);
+            
+            // Enemy mana bar
+            this.enemyManaBar = this.add.rectangle(-25, 5, 50, 5, 0x0000FF);
+            this.enemyManaBarBg = this.add.rectangle(-25, 5, 50, 5, 0x000000);
+            this.enemyManaBarBg.setStrokeStyle(1, 0x000000);
+            
+            this.enemyBars.add([
+                this.enemyHealthBarBg,
+                this.enemyHealthBar,
+                this.enemyManaBarBg,
+                this.enemyManaBar
+            ]);
         }
 
-        canvas.addEventListener('mousedown', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            
-            const dx = x - game.npc.x;
-            const dy = y - game.npc.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance < PLAYER_SIZE) {
-                // Toggle target selection
-                if (game.selectedTarget === game.npc) {
-                    game.selectedTarget = null;
-                } else {
-                    game.selectedTarget = game.npc;
+        setupInput() {
+            // Mouse input
+            this.input.on('pointerdown', (pointer) => {
+                const distance = Phaser.Math.Distance.Between(
+                    pointer.x, pointer.y,
+                    this.enemy.x, this.enemy.y
+                );
+
+                if (distance < this.PLAYER_SIZE) {
+                    this.selectedTarget = this.selectedTarget === this.enemy ? null : this.enemy;
                 }
-            }
-            // Always allow movement regardless of targeting
-            game.isMoving = true;
-        });
+                this.isMoving = true;
+            });
 
-        canvas.addEventListener('mouseup', () => {
-            game.isMoving = false;
-        });
+            this.input.on('pointerup', () => {
+                this.isMoving = false;
+            });
 
-        canvas.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            game.mousePos.x = e.clientX - rect.left;
-            game.mousePos.y = e.clientY - rect.top;
-        });
+            this.input.on('pointermove', (pointer) => {
+                this.pointer = pointer;
+            });
 
-        canvas.addEventListener('mouseleave', () => {
-            game.isMoving = false;
-        });
+            // Keyboard input
+            this.input.keyboard.on('keydown-R', () => {
+                this.castSpell();
+            });
+        }
 
-        window.addEventListener('keydown', (e) => {
-            if (e.key.toLowerCase() === 'r' && game.selectedTarget && game.player.mana >= 20) {
-                game.spells.push({
-                    x: game.player.x,
-                    y: game.player.y,
-                    targetX: game.selectedTarget.x,
-                    targetY: game.selectedTarget.y,
-                    type: 'magicArrow',
-                    createdAt: Date.now(),
+        castSpell() {
+            if (this.selectedTarget && this.playerStats.mana >= 20) {
+                const spell = this.add.circle(this.player.x, this.player.y, 5, 0xFF9900);
+                this.physics.add.existing(spell);
+                
+                const angle = Phaser.Math.Angle.Between(
+                    this.player.x, this.player.y,
+                    this.selectedTarget.x, this.selectedTarget.y
+                );
+
+                this.physics.moveTo(spell, this.selectedTarget.x, this.selectedTarget.y, 300);
+                
+                this.playerStats.mana -= 20;
+                
+                // Destroy spell after 1 second
+                this.time.delayedCall(1000, () => {
+                    spell.destroy();
                 });
-                game.player.mana -= 20;
-            }
-        });
 
-        // Start the game
-        gameLoop();
+                // Check for hits
+                this.physics.add.overlap(spell, this.selectedTarget, () => {
+                    this.enemyStats.health = Math.max(0, this.enemyStats.health - 20);
+                    spell.destroy();
+                });
+            }
+        }
+
+        update() {
+            // Update player movement
+            if (this.isMoving && this.pointer) {
+                const angle = Phaser.Math.Angle.Between(
+                    this.player.x, this.player.y,
+                    this.pointer.x, this.pointer.y
+                );
+                
+                const velocity = new Phaser.Math.Vector2();
+                velocity.setToPolar(angle, this.PLAYER_SPEED);
+                
+                this.player.body.setVelocity(velocity.x, velocity.y);
+            } else {
+                this.player.body.setVelocity(0, 0);
+            }
+
+            // Update status bars position
+            this.playerBars.setPosition(this.player.x, this.player.y - 30);
+            this.enemyBars.setPosition(this.enemy.x, this.enemy.y - 30);
+
+            // Update status bars scale
+            this.playerHealthBar.scaleX = this.playerStats.health / 100;
+            this.playerManaBar.scaleX = this.playerStats.mana / 100;
+            this.enemyHealthBar.scaleX = this.enemyStats.health / 100;
+            this.enemyManaBar.scaleX = this.enemyStats.mana / 100;
+
+            // Regenerate health and mana
+            this.playerStats.health = Math.min(100, this.playerStats.health + 0.1);
+            this.playerStats.mana = Math.min(100, this.playerStats.mana + 0.2);
+            this.enemyStats.health = Math.min(100, this.enemyStats.health + 0.1);
+            this.enemyStats.mana = Math.min(100, this.enemyStats.mana + 0.2);
+
+            // Update targeting indicator
+            if (this.selectedTarget) {
+                this.updateTargetingIndicator();
+            }
+        }
+
+        updateTargetingIndicator() {
+            // Remove previous targeting indicator if it exists
+            if (this.targetingIndicator) {
+                this.targetingIndicator.destroy();
+            }
+
+            const graphics = this.add.graphics();
+            graphics.lineStyle(2, 0xFF0000);
+
+            // Draw pulsing circle
+            const time = this.time.now * 0.003;
+            const size = this.PLAYER_SIZE + 5 + Math.sin(time) * 3;
+            graphics.strokeCircle(this.selectedTarget.x, this.selectedTarget.y, size);
+
+            // Draw crosshair
+            const crosshairSize = 10;
+            graphics.moveTo(this.selectedTarget.x - crosshairSize, this.selectedTarget.y);
+            graphics.lineTo(this.selectedTarget.x + crosshairSize, this.selectedTarget.y);
+            graphics.moveTo(this.selectedTarget.x, this.selectedTarget.y - crosshairSize);
+            graphics.lineTo(this.selectedTarget.x, this.selectedTarget.y + crosshairSize);
+            graphics.strokePath();
+
+            this.targetingIndicator = graphics;
+        }
+    }
+
+    const config = {
+        type: Phaser.AUTO,
+        parent: 'gameCanvas',
+        width: 800,
+        height: 600,
+        physics: {
+            default: 'arcade',
+            arcade: {
+                gravity: { y: 0 },
+                debug: false
+            }
+        },
+        scene: MainScene
+    };
+
+    const game = new Phaser.Game(config);
     </script>
 </body>
 </html>
