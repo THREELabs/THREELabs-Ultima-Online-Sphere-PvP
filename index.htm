@@ -55,6 +55,8 @@
                 • Hold left mouse button to move your character<br>
                 • Click on the red enemy to target/untarget them (targeting persists while moving)<br>
                 • Press R to cast Magic Arrow while moving (costs 20 mana)<br>
+                • Press T to cast Lightning while moving (costs 30 mana)<br>
+                • Press F to cast Flame Strike while moving (costs 40 mana)<br>
                 • Use walls and houses for cover - spells can't pass through them!<br>
                 • You can move and cast spells at the same time!<br>
                 • Be careful not to cast too quickly or your spell will fizzle!
@@ -164,19 +166,6 @@ class MainScene extends Phaser.Scene {
         groundTiles.setOrigin(0, 0);
         groundTiles.setDepth(0);
 
-        // Create simple roads
-        // Create simple roads as rectangles
-        this.roads = this.add.group();
-        [
-            { x: 0, y: 200, width: this.GAME_WIDTH, height: 40 },
-            { x: 400, y: 0, width: 40, height: this.GAME_HEIGHT }
-        ].forEach(road => {
-            const roadRect = this.add.rectangle(road.x, road.y, road.width, road.height, 0x8B4513);
-            roadRect.setOrigin(0, 0);
-            roadRect.setDepth(1);
-            this.roads.add(roadRect);
-        });
-
         // Create simple walls as rectangles
         this.walls = this.physics.add.staticGroup();
         [
@@ -244,11 +233,21 @@ class MainScene extends Phaser.Scene {
         this.enemyShadow = this.add.ellipse(700, 505, 30, 15, 0x000000, 0.3);
         this.enemyShadow.setDepth(3);
 
+        // Initialize enemy AI properties
+        this.enemy.lastCastTime = 0;
+        this.enemy.isCasting = false;
+        this.enemy.nextSpellTime = 0;
+        this.enemy.avoidanceTimer = 0;
+        this.enemy.currentTarget = this.player;
+
         // Add collisions
         this.physics.add.collider(this.player, this.walls);
         this.physics.add.collider(this.player, this.houses);
         this.physics.add.collider(this.enemy, this.walls);
         this.physics.add.collider(this.enemy, this.houses);
+
+        // Track active spells for avoidance
+        this.activeSpells = this.add.group();
     }
 
     createUI() {
@@ -335,6 +334,246 @@ class MainScene extends Phaser.Scene {
         // Keyboard input
         this.input.keyboard.on('keydown-R', () => {
             this.castSpell();
+        });
+        
+        this.input.keyboard.on('keydown-T', () => {
+            this.castLightningSpell();
+        });
+
+        this.input.keyboard.on('keydown-F', () => {
+            this.castFlameStrikeSpell();
+        });
+    }
+
+    castLightningSpell() {
+        // Check if already casting or not enough mana
+        if (!this.selectedTarget || this.playerStats.mana < 30) {
+            return;
+        }
+
+        // Get current time
+        const currentTime = this.time.now;
+        
+        // Check if casting too fast (before previous cast completed)
+        if (this.isCasting) {
+            // Create fizzle effect at player position
+            this.createFizzleEffect(this.player.x, this.player.y);
+            return;
+        }
+
+        // Check if we need to wait for cooldown
+        if (this.lastCastTime && currentTime - this.lastCastTime < 900) {
+            // Create fizzle effect at player position to show failed cast
+            this.createFizzleEffect(this.player.x, this.player.y);
+            return;
+        }
+
+        this.isCasting = true;
+        this.lastCastTime = currentTime;
+
+        // Create casting circle indicator with lightning color
+        const castingCircle = this.add.circle(this.player.x, this.player.y, this.PLAYER_SIZE + 5, 0x00FFFF, 0.3);
+        
+        // Start casting animation
+        this.tweens.add({
+            targets: castingCircle,
+            alpha: 0.6,
+            yoyo: true,
+            repeat: 2,
+            duration: 450,
+            onComplete: () => {
+                castingCircle.destroy();
+            }
+        });
+
+        // After cast time, launch the spell
+        this.time.delayedCall(900, () => {
+            if (this.selectedTarget && this.selectedTarget.active) {
+                const spell = this.add.circle(this.player.x, this.player.y, 7, 0x00FFFF);
+                this.physics.add.existing(spell);
+                
+                const angle = Phaser.Math.Angle.Between(
+                    this.player.x, this.player.y,
+                    this.selectedTarget.x, this.selectedTarget.y
+                );
+
+                this.physics.moveTo(spell, this.selectedTarget.x, this.selectedTarget.y, 400);
+                
+                this.playerStats.mana -= 30;
+                
+                // Add collision with walls and houses
+                this.physics.add.collider(spell, this.walls, (spellObj) => {
+                    this.createLightningEffect(spellObj.x, spellObj.y);
+                    spellObj.destroy();
+                });
+                
+                this.physics.add.collider(spell, this.houses, (spellObj) => {
+                    this.createLightningEffect(spellObj.x, spellObj.y);
+                    spellObj.destroy();
+                });
+
+                // Check for hits on target
+                this.physics.add.overlap(spell, this.selectedTarget, (spellObj) => {
+                    this.enemyStats.health = Math.max(0, this.enemyStats.health - 35);
+                    this.createLightningEffect(spellObj.x, spellObj.y);
+                    spellObj.destroy();
+                });
+
+                // Destroy spell after 1 second if it hasn't hit anything
+                this.time.delayedCall(1000, () => {
+                    if (spell.active) {
+                        this.createLightningEffect(spell.x, spell.y);
+                        spell.destroy();
+                    }
+                });
+            }
+            
+            this.isCasting = false;
+        });
+    }
+
+    castFlameStrikeSpell() {
+        // Check if already casting or not enough mana
+        if (!this.selectedTarget || this.playerStats.mana < 40) {
+            return;
+        }
+
+        // Get current time
+        const currentTime = this.time.now;
+        
+        // Check if casting too fast (before previous cast completed)
+        if (this.isCasting) {
+            // Create fizzle effect at player position
+            this.createFizzleEffect(this.player.x, this.player.y);
+            return;
+        }
+
+        // Check if we need to wait for cooldown
+        if (this.lastCastTime && currentTime - this.lastCastTime < 1200) {
+            // Create fizzle effect at player position to show failed cast
+            this.createFizzleEffect(this.player.x, this.player.y);
+            return;
+        }
+
+        this.isCasting = true;
+        this.lastCastTime = currentTime;
+
+        // Create casting circle indicator with flame colors
+        const castingCircle = this.add.circle(this.player.x, this.player.y, this.PLAYER_SIZE + 5, 0xFF4500, 0.3);
+        
+        // Start casting animation
+        this.tweens.add({
+            targets: castingCircle,
+            alpha: 0.6,
+            yoyo: true,
+            repeat: 3,
+            duration: 400,
+            onComplete: () => {
+                castingCircle.destroy();
+            }
+        });
+
+        // After cast time, launch the spell
+        this.time.delayedCall(1200, () => {
+            if (this.selectedTarget && this.selectedTarget.active) {
+                const spell = this.add.circle(this.player.x, this.player.y, 10, 0xFF4500);
+                this.physics.add.existing(spell);
+                
+                const angle = Phaser.Math.Angle.Between(
+                    this.player.x, this.player.y,
+                    this.selectedTarget.x, this.selectedTarget.y
+                );
+
+                this.physics.moveTo(spell, this.selectedTarget.x, this.selectedTarget.y, 350);
+                
+                this.playerStats.mana -= 40;
+                
+                // Add collision with walls and houses
+                this.physics.add.collider(spell, this.walls, (spellObj) => {
+                    this.createFlameEffect(spellObj.x, spellObj.y);
+                    spellObj.destroy();
+                });
+                
+                this.physics.add.collider(spell, this.houses, (spellObj) => {
+                    this.createFlameEffect(spellObj.x, spellObj.y);
+                    spellObj.destroy();
+                });
+
+                // Check for hits on target
+                this.physics.add.overlap(spell, this.selectedTarget, (spellObj) => {
+                    this.enemyStats.health = Math.max(0, this.enemyStats.health - 45);
+                    this.createFlameEffect(spellObj.x, spellObj.y);
+                    spellObj.destroy();
+                });
+
+                // Destroy spell after 1 second if it hasn't hit anything
+                this.time.delayedCall(1000, () => {
+                    if (spell.active) {
+                        this.createFlameEffect(spell.x, spell.y);
+                        spell.destroy();
+                    }
+                });
+            }
+            
+            this.isCasting = false;
+        });
+    }
+
+    createFlameEffect(x, y) {
+        // Create flame particles
+        const particles = this.add.particles(x, y, {
+            speed: { min: 100, max: 200 },
+            scale: { start: 0.8, end: 0 },
+            quantity: 12,
+            lifespan: 600,
+            tint: [0xFF4500, 0xFF6B00, 0xFF8C00],
+            angle: { min: 0, max: 360 }
+        });
+
+        // Create a flame burst effect
+        const burst = this.add.circle(x, y, 25, 0xFF4500, 0.7);
+        this.tweens.add({
+            targets: burst,
+            alpha: 0,
+            scale: 1.8,
+            duration: 300,
+            onComplete: () => {
+                burst.destroy();
+            }
+        });
+
+        // Destroy particles after animation completes
+        this.time.delayedCall(600, () => {
+            particles.destroy();
+        });
+    }
+
+    createLightningEffect(x, y) {
+        // Create lightning particles
+        const particles = this.add.particles(x, y, {
+            speed: 150,
+            scale: { start: 0.7, end: 0 },
+            quantity: 8,
+            lifespan: 400,
+            tint: 0x00FFFF,
+            angle: { min: 0, max: 360 }
+        });
+
+        // Create a flash effect
+        const flash = this.add.circle(x, y, 20, 0x00FFFF, 0.6);
+        this.tweens.add({
+            targets: flash,
+            alpha: 0,
+            scale: 1.5,
+            duration: 200,
+            onComplete: () => {
+                flash.destroy();
+            }
+        });
+
+        // Destroy particles after animation completes
+        this.time.delayedCall(400, () => {
+            particles.destroy();
         });
     }
 
@@ -466,6 +705,174 @@ class MainScene extends Phaser.Scene {
         this.targetingIndicator = graphics;
     }
 
+    enemyCastSpell() {
+        if (this.enemy.isCasting || this.enemyStats.mana < 20 || this.time.now < this.enemy.nextSpellTime) {
+            return;
+        }
+
+        const distance = Phaser.Math.Distance.Between(
+            this.enemy.x, this.enemy.y,
+            this.player.x, this.player.y
+        );
+
+        // Only cast if player is within range and there's line of sight
+        if (distance < 300 && this.hasLineOfSight(this.enemy, this.player)) {
+            this.enemy.isCasting = true;
+            this.enemy.nextSpellTime = this.time.now + Phaser.Math.Between(1000, 2000);
+
+            // Create casting circle indicator
+            const castingCircle = this.add.circle(this.enemy.x, this.enemy.y, 20, 0xFF0000, 0.3);
+            
+            // Start casting animation
+            this.tweens.add({
+                targets: castingCircle,
+                alpha: 0.6,
+                yoyo: true,
+                repeat: 2,
+                duration: 350,
+                onComplete: () => {
+                    castingCircle.destroy();
+                }
+            });
+
+            // After cast time, launch the spell
+            this.time.delayedCall(700, () => {
+                if (this.enemy.active) {
+                    const spell = this.add.circle(this.enemy.x, this.enemy.y, 5, 0xFF0000);
+                    this.physics.add.existing(spell);
+                    
+                    // Add to active spells group
+                    this.activeSpells.add(spell);
+                    
+                    // Calculate lead target position based on player velocity
+                    const leadFactor = 0.5;
+                    const targetX = this.player.x + (this.player.body.velocity.x * leadFactor);
+                    const targetY = this.player.y + (this.player.body.velocity.y * leadFactor);
+                    
+                    this.physics.moveTo(spell, targetX, targetY, 300);
+                    
+                    this.enemyStats.mana -= 20;
+                    
+                    // Add collisions
+                    this.physics.add.collider(spell, this.walls, (spellObj) => {
+                        this.createFizzleEffect(spellObj.x, spellObj.y);
+                        spellObj.destroy();
+                    });
+                    
+                    this.physics.add.collider(spell, this.houses, (spellObj) => {
+                        this.createFizzleEffect(spellObj.x, spellObj.y);
+                        spellObj.destroy();
+                    });
+
+                    // Check for hits on player
+                    this.physics.add.overlap(spell, this.player, (spellObj) => {
+                        this.playerStats.health = Math.max(0, this.playerStats.health - 20);
+                        this.createFizzleEffect(spellObj.x, spellObj.y);
+                        spellObj.destroy();
+                    });
+
+                    // Destroy spell after 1 second if it hasn't hit anything
+                    this.time.delayedCall(1000, () => {
+                        if (spell.active) {
+                            this.createFizzleEffect(spell.x, spell.y);
+                            spell.destroy();
+                        }
+                    });
+                }
+                
+                this.enemy.isCasting = false;
+            });
+        }
+    }
+
+    hasLineOfSight(source, target) {
+        const line = new Phaser.Geom.Line(source.x, source.y, target.x, target.y);
+        const walls = this.walls.getChildren();
+        const houses = this.houses.getChildren();
+        
+        // Check collision with walls and houses
+        for (let wall of walls) {
+            if (Phaser.Geom.Intersects.LineToRectangle(line, wall.getBounds())) {
+                return false;
+            }
+        }
+        for (let house of houses) {
+            if (Phaser.Geom.Intersects.LineToRectangle(line, house.getBounds())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    updateEnemyMovement() {
+        const currentTime = this.time.now;
+        
+        // Check for nearby spells to avoid
+        let nearestSpell = null;
+        let nearestDistance = 100;
+        
+        this.spells?.forEach(spell => {
+            if (spell.active) {
+                const distance = Phaser.Math.Distance.Between(
+                    this.enemy.x, this.enemy.y,
+                    spell.x, spell.y
+                );
+                if (distance < nearestDistance) {
+                    nearestSpell = spell;
+                    nearestDistance = distance;
+                }
+            }
+        });
+
+        if (nearestSpell) {
+            // Move perpendicular to spell direction
+            const angle = Phaser.Math.Angle.Between(
+                nearestSpell.x, nearestSpell.y,
+                this.enemy.x, this.enemy.y
+            );
+            const perpAngle = angle + Math.PI / 2;
+            
+            this.enemy.body.setVelocity(
+                Math.cos(perpAngle) * this.PLAYER_SPEED,
+                Math.sin(perpAngle) * this.PLAYER_SPEED
+            );
+            
+            this.enemy.avoidanceTimer = currentTime + 500;
+        } else if (currentTime > this.enemy.avoidanceTimer) {
+            // Normal movement behavior
+            const distance = Phaser.Math.Distance.Between(
+                this.enemy.x, this.enemy.y,
+                this.player.x, this.player.y
+            );
+
+            if (distance > 200) {
+                // Move closer to player
+                this.physics.moveTo(this.enemy, this.player.x, this.player.y, this.PLAYER_SPEED * 0.8);
+            } else if (distance < 150) {
+                // Move away from player
+                const angle = Phaser.Math.Angle.Between(
+                    this.player.x, this.player.y,
+                    this.enemy.x, this.enemy.y
+                );
+                this.enemy.body.setVelocity(
+                    Math.cos(angle) * this.PLAYER_SPEED,
+                    Math.sin(angle) * this.PLAYER_SPEED
+                );
+            } else {
+                // Strafe around player
+                const angle = Phaser.Math.Angle.Between(
+                    this.player.x, this.player.y,
+                    this.enemy.x, this.enemy.y
+                );
+                const strafeAngle = angle + Math.PI / 2;
+                this.enemy.body.setVelocity(
+                    Math.cos(strafeAngle) * this.PLAYER_SPEED,
+                    Math.sin(strafeAngle) * this.PLAYER_SPEED
+                );
+            }
+        }
+    }
+
     update() {
         // Update player movement
         if (this.isMoving && this.pointer) {
@@ -518,6 +925,10 @@ class MainScene extends Phaser.Scene {
         if (this.selectedTarget) {
             this.updateTargetingIndicator();
         }
+
+        // Update enemy behavior
+        this.updateEnemyMovement();
+        this.enemyCastSpell();
     }
 }
 
