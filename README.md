@@ -1,6 +1,6 @@
 # 🎮 Sphere UO Web - Mage Combat
 
-A browser-based implementation of Ultima Online's PvP magic combat system using Phaser 3. This project focuses on recreating the strategic spell-casting mechanics that made UO's PvP legendary.
+A browser-based implementation of Ultima Online's PvP magic combat system using Phaser 3. This project focuses on recreating the strategic spell-casting mechanics that made Sphere Shard's PvP so legendary.
 
 ## ✨ Current Features
 
