@@ -473,8 +473,11 @@ class MainScene extends Phaser.Scene {
                 this.player.x, this.player.y,
                 this.pointer.x, this.pointer.y
             );
-            
-            if (distance > this.PLAYER_SIZE) {
+
+            // Add a small deadzone to prevent wiggling when cursor is very close
+            if (distance < 5) {
+                this.player.body.setVelocity(0, 0);
+            } else {
                 const angle = Phaser.Math.Angle.Between(
                     this.player.x, this.player.y,
                     this.pointer.x, this.pointer.y
@@ -484,12 +487,10 @@ class MainScene extends Phaser.Scene {
                 velocity.setToPolar(angle, this.PLAYER_SPEED);
                 
                 this.player.body.setVelocity(velocity.x, velocity.y);
-                
-                // Update player shadow position
-                this.playerShadow.setPosition(this.player.x + 5, this.player.y + 5);
-            } else {
-                this.player.body.setVelocity(0, 0);
             }
+            
+            // Update player shadow position
+            this.playerShadow.setPosition(this.player.x + 5, this.player.y + 5);
         } else {
             this.player.body.setVelocity(0, 0);
         }
