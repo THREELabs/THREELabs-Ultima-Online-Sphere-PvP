@@ -3,10 +3,8 @@ import MainScene from './MainScene.js';
 const config = {
     type: Phaser.AUTO,
     parent: 'gameCanvas',
-    width: 800,
-    height: 600,
     scale: {
-        mode: Phaser.Scale.FIT,
+        mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH
     },
     physics: {

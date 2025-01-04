@@ -20,7 +20,7 @@ export default class MainScene extends Phaser.Scene {
     }
 
     preload() {
-        console.log('MainScene preload started');
+        console.log('MainScene preload started - checking if this is called');
         try {
             // Create grass texture
             console.log('Creating grass texture...');
