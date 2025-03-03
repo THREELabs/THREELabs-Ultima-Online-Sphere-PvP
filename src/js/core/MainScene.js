@@ -20,54 +20,14 @@ export default class MainScene extends Phaser.Scene {
     }
 
     preload() {
-        console.log('MainScene preload started - checking if this is called');
-        try {
-            // Create grass texture
-            console.log('Creating grass texture...');
-            const canvas = document.createElement('canvas');
-            canvas.width = 32;
-            canvas.height = 32;
-            const ctx = canvas.getContext('2d');
-        
-            ctx.fillStyle = '#2d5a27';
-            ctx.fillRect(0, 0, 32, 32);
-            
-            const imageData = ctx.getImageData(0, 0, 32, 32);
-            for (let i = 0; i < imageData.data.length; i += 4) {
-                const noise = Math.random() * 20 - 10;
-                imageData.data[i] = Math.max(0, Math.min(255, imageData.data[i] + noise));
-                imageData.data[i + 1] = Math.max(0, Math.min(255, imageData.data[i + 1] + noise));
-                imageData.data[i + 2] = Math.max(0, Math.min(255, imageData.data[i + 2] + noise));
-            }
-            ctx.putImageData(imageData, 0, 0);
-            
-            ctx.strokeStyle = '#1e3f1c';
-            ctx.lineWidth = 1;
-            
-            for (let i = 0; i < 12; i++) {
-                const x = Math.random() * 32;
-                const y = Math.random() * 32;
-                const length = 6 + Math.random() * 4;
-                const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.8;
-                
-                ctx.beginPath();
-                ctx.moveTo(x, y);
-                ctx.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
-                ctx.stroke();
-            }
-            
-            console.log('Adding grass texture...');
-            this.textures.addCanvas('grass', canvas);
-            console.log('Grass texture created successfully');
-        } catch (error) {
-            console.error('Error creating grass texture:', error);
-        }
-        console.log('MainScene preload completed');
+        console.log('MainScene preload started');
+        this.load.image('player', 'assets/player.png');
+        this.load.image('enemy', 'assets/enemy.png');
     }
 
     create() {
         console.log('MainScene create started');
-        
+
         try {
             // Initialize world
             console.log('Creating world...');
@@ -82,7 +42,7 @@ export default class MainScene extends Phaser.Scene {
             // Initialize UI
             console.log('Creating UI...');
             this.uiManager = new UIManager(this);
-            
+
             // Setup collisions
             console.log('Setting up collisions...');
             this.physics.add.collider(this.player.sprite, this.worldManager.walls);
@@ -93,7 +53,7 @@ export default class MainScene extends Phaser.Scene {
             // Setup input handlers
             console.log('Setting up input...');
             this.setupInput();
-            
+
             console.log('MainScene create completed successfully');
         } catch (error) {
             console.error('Error in MainScene create:', error);
@@ -131,7 +91,7 @@ export default class MainScene extends Phaser.Scene {
         const line = new Phaser.Geom.Line(source.x, source.y, target.x, target.y);
         const walls = this.worldManager.walls.getChildren();
         const houses = this.worldManager.houses.getChildren();
-        
+
         for (let wall of walls) {
             if (Phaser.Geom.Intersects.LineToRectangle(line, wall.getBounds())) {
                 return false;
@@ -148,13 +108,13 @@ export default class MainScene extends Phaser.Scene {
     update() {
         // Update player
         this.player.update(this.isMoving, this.pointer);
-        
+
         // Update enemy
         this.enemy.update(this.player);
-        
+
         // Update UI
         this.uiManager.update();
-        
+
         // Update targeting indicator if target is selected
         if (this.selectedTarget) {
             this.uiManager.updateTargetingIndicator(this.selectedTarget);

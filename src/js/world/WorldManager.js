@@ -7,29 +7,10 @@ export class WorldManager {
     }
 
     createWorld() {
-        this.createGround();
+        this.scene.cameras.main.setBackgroundColor('#2d5a27');
         this.createWalls();
         this.createHouses();
         this.createTrees();
-    }
-
-    createGround() {
-        // Create tiled grass ground
-        const groundTiles = this.scene.add.tileSprite(
-            0, 0,
-            this.scene.GAME_WIDTH,
-            this.scene.GAME_HEIGHT,
-            'grass'
-        );
-        groundTiles.setOrigin(0, 0);
-        groundTiles.setDepth(0);
-        
-        // Debug output
-        console.log('Ground created:', {
-            width: this.scene.GAME_WIDTH,
-            height: this.scene.GAME_HEIGHT,
-            texture: 'grass'
-        });
     }
 
     createWalls() {

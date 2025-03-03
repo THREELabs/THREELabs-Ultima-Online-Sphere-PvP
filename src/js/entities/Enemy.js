@@ -7,13 +7,13 @@ export class Enemy {
             health: 100,
             mana: 100
         };
-        
+
         // Create enemy sprite
-        this.sprite = scene.add.circle(x, y, 15, 0xFF0000);
+        this.sprite = scene.add.sprite(x, y, 'enemy');
         this.sprite.setDepth(4);
         scene.physics.add.existing(this.sprite);
         this.sprite.body.setCollideWorldBounds(true);
-        
+
         // Add enemy shadow
         this.shadow = scene.add.ellipse(x + 5, y + 5, 30, 15, 0x000000, 0.3);
         this.shadow.setDepth(3);
