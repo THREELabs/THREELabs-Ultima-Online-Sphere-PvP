@@ -22,7 +22,7 @@ export class WorldManager {
             const wallRect = this.scene.add.rectangle(
                 wall.x, wall.y,
                 wall.width, wall.height,
-                0x808080
+                0x635f5f
             );
             wallRect.setOrigin(0, 0);
             wallRect.setDepth(2);
@@ -40,7 +40,7 @@ export class WorldManager {
             const houseRect = this.scene.add.rectangle(
                 house.x, house.y,
                 house.width, house.height,
-                0xA0522D
+                0x795548
             );
             houseRect.setOrigin(0, 0);
             houseRect.setDepth(2);
@@ -68,7 +68,7 @@ export class WorldManager {
             const treeCircle = this.scene.add.circle(
                 tree.x, tree.y,
                 tree.radius,
-                0x228B22
+                0x388E3C
             );
             treeCircle.setDepth(3);
             this.trees.add(treeCircle);
