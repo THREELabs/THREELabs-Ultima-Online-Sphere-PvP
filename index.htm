@@ -1,91 +1,1297 @@
+
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Phaser Mage Game</title>
+    <title>Ultima Brawler</title>
+    <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
+        :root {
+            --ui-height: clamp(110px, 22dvh, 170px);
+            --world-width: 2200px;
+            --world-height: 1500px;
+        }
+        body { font-family: 'Courier New', Courier, monospace; display: flex; align-items: center; justify-content: center; height: 100dvh; margin: 0; background-color: #1a1a1a; color: #fff; overflow: hidden; }
+        .screen { text-align: center; }
+        #game-container { display: none; }
+        #login-screen input, #login-screen button { font-size: 16px; padding: 8px; margin: 5px; background-color: #444; color: #fff; border: 1px solid #666; cursor: pointer; }
+        #login-screen button:hover { background-color: #555; }
+        #observe-game-btn { background-color: #2b3a55; border-color: #5b7fb0; }
+        #observe-game-btn:hover { background-color: #38507a; }
+        #observer-banner { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 100;
+            background: rgba(20,28,48,.92); color: #9fc4ff; border: 1px solid #5b7fb0; border-radius: 999px;
+            padding: 6px 16px; font-size: 13px; font-weight: 600; letter-spacing: .3px; pointer-events: none;
+            box-shadow: 0 2px 14px rgba(0,0,0,.4); }
+        #status-message { color: #ffaeae; min-height: 20px; }
+        #game-world {
+            width: 100vw;
+            height: calc(100dvh - var(--ui-height));
+            position: relative;
             overflow: hidden;
-            background-color: black;
+            border: 0;
+            cursor: crosshair;
+            -webkit-user-select: none; user-select: none;
+            touch-action: none;
         }
-        #gameCanvas {
-            width: 100%;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background-color: black;
-        }
-        canvas {
-            max-width: 100%;
-            max-height: 100%;
-        }
-        .menu-button {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            border: 2px solid white;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-family: Arial, sans-serif;
-            z-index: 1000;
-        }
-        .menu-panel {
-            position: fixed;
-            top: 70px;
-            right: 20px;
-            background: rgba(0, 0, 0, 0.85);
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
-            font-family: Arial, sans-serif;
-            max-width: 400px;
-            display: none;
-            z-index: 1000;
-        }
-        .menu-title {
-            color: #4169E1;
-            font-size: 20px;
-            font-weight: bold;
-            margin-bottom: 15px;
-        }
-        .menu-content {
-            color: #fff;
-            line-height: 1.6;
-        }
+        #world-container { width: var(--world-width); height: var(--world-height); position: absolute; background-color: #1a472a; transform-origin: 0 0; }
+        /* ===== Observer controller ===== */
+        #obs-controls { position: fixed; inset: 0; z-index: 60; pointer-events: none; display: none; }
+        #obs-controls.active { display: block; }
+        #obs-msg { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); color: #9fc4ff;
+            font-size: 13px; background: rgba(20,28,48,.8); padding: 6px 14px; border-radius: 999px; border: 1px solid #5b7fb0; }
+        #obs-dpad { position: absolute; left: 18px; bottom: calc(var(--ui-height) + 18px); width: 168px; height: 168px;
+            display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 8px; pointer-events: auto; }
+        #obs-dpad button { background: rgba(43,58,85,.9); border: 1px solid #5b7fb0; color: #cfe2ff; border-radius: 14px;
+            font-size: 24px; font-weight: 700; cursor: pointer; touch-action: none; user-select: none; }
+        #obs-dpad button:active { background: #5b7fb0; color: #fff; }
+        #obs-up { grid-area: 1 / 2; } #obs-left { grid-area: 2 / 1; } #obs-right { grid-area: 2 / 3; } #obs-down { grid-area: 3 / 2; }
+        #obs-zoom { position: absolute; right: 18px; bottom: calc(var(--ui-height) + 18px); display: flex; flex-direction: column; gap: 10px; pointer-events: auto; }
+        #obs-zoom button { width: 58px; height: 58px; border-radius: 14px; background: rgba(43,58,85,.9); border: 1px solid #5b7fb0;
+            color: #cfe2ff; font-size: 13px; font-weight: 700; cursor: pointer; touch-action: none; user-select: none; }
+        #obs-zoom button.on { background: #5b7fb0; color: #fff; box-shadow: 0 0 12px rgba(120,160,255,.7); }
+        #obs-zoom button:active { background: #6f93c8; }
+        #ui-panel { width: 100vw; height: var(--ui-height); background-color: #2a2a2a; border-top: 2px solid #666; display: flex; flex-direction: column; padding: 5px; padding-left: max(5px, env(safe-area-inset-left)); padding-right: max(5px, env(safe-area-inset-right)); box-sizing: border-box; }
+        .map-feature { position: absolute; box-sizing: border-box; }
+        #water-north { top: 0; left: 0; width: 100%; height: 650px; background-color: #1a3a5a; }
+        #britain-bridge { top: 650px; left: 0; width: 100%; height: 200px; background-color: #654321; border-top: 5px solid #4a3018; border-bottom: 5px solid #4a3018; position: relative; }
+        #bridge-planks { width: 100%; height: 100%; background-image: repeating-linear-gradient(90deg, rgba(0,0,0,0.1) 20px, transparent 20px, transparent 40px); }
+        #britain-bridge::before, #britain-bridge::after { content: ''; position: absolute; left: 0; width: 100%; height: 10px; background-color: #4a3018; box-shadow: 0 2px 4px rgba(0,0,0,0.5); z-index: 2; }
+        #britain-bridge::before { top: 0; }
+        #britain-bridge::after { bottom: 0; }
+        #water-south { top: 850px; left: 0; width: 100%; height: 650px; background-color: #1a3a5a; }
+        .building { position: absolute; box-sizing: border-box; border: 2px solid #3a2d1a; box-shadow: 5px 5px 10px rgba(0,0,0,0.4); z-index: 3; }
+        .building::before { content: ''; position: absolute; top: -39px; left: -3px; width: calc(100% + 4px); height: 35px; background-color: #A52A2A; border: 2px solid #3a2d1a; clip-path: polygon(0% 100%, 50% 0%, 100% 100%); z-index: 4; }
+        .building::after { content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 25px; height: 40px; background-color: #5C2E00; border-top: 2px solid #3a2d1a; border-left: 2px solid #3a2d1a; border-right: 2px solid #3a2d1a; z-index: 5; }
+        #bank { top: 520px; left: 300px; width: 160px; height: 100px; background: linear-gradient(45deg, #a1a1a1, #cccccc); border-color: #444; }
+        #bank::before { background-color: #696969; border-color: #444; top: -30px; height: 25px; }
+        #bank::after { height: 50px; width: 30px; background-color: #4a3018; }
+        #blacksmith { top: 500px; left: 500px; width: 120px; height: 120px; background-color: #696969; border-color: #333; }
+        #blacksmith::before { background-color: #4d4d4d; border-color: #333; }
+        .chimney { position: absolute; right: 10px; top: -50px; width: 20px; height: 40px; background-color: #5a5a5a; border: 2px solid #333; z-index: 2; }
+        #healers-hut { top: 530px; left: 180px; width: 80px; height: 70px; background-color: #D2B48C; border-color: #8B4513; }
+        #healers-hut::before { background-color: #c14444; }
+        .game-object { width: 30px; height: 30px; position: absolute; transition: box-shadow 0.3s ease-in-out; box-sizing: border-box; }
+        .player-object { border: 2px solid #111; border-radius: 50%; }
+        .local-player { background-color: #4a90e2; z-index: 10; }
+        .remote-player { background-color: #d0021b; z-index: 9; }
+        .npc-object { background-color: #7ed321; border: 2px solid #111; border-radius: 10px; z-index: 5; transition: opacity 0.5s ease-in-out; }
+        .npc-object.mage-npc { background: radial-gradient(circle at 50% 35%, #b39ddb, #4527a0 70%); border: 2px solid #1a0d3d; border-radius: 50% 50% 45% 45%; box-shadow: 0 0 14px rgba(120,90,255,.65); }
+        .npc-object.mage-npc::after { content: '🧙'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .npc-object.mage-npc.casting { box-shadow: 0 0 22px rgba(180,120,255,.95); animation: magePulse .5s ease-in-out infinite alternate; }
+        @keyframes magePulse { from { transform: scale(1); } to { transform: scale(1.12); } }
+        .gold-pile { background-color: #ffd700; width: 15px; height: 15px; border-radius: 50%; border: 1px solid #b8860b; z-index: 1; box-shadow: 0 0 5px #ffd700; }
+        #shrine { position: absolute; top: 720px; left: 45px; width: 60px; height: 60px; background-color: #c0c0c0; border: 3px solid #f0e68c; border-radius: 50%; box-shadow: 0 0 15px #ffffff; z-index: 2; }
+        #safe-zone { position: absolute; top: 0; left: 0; width: 150px; height: 100%; background-color: rgba(173, 216, 230, 0.3); border-right: 3px solid #add8e6; box-sizing: border-box; z-index: 0; }
+        #idle-player-area { position: absolute; top: 10px; left: 10px; width: 130px; height: 200px; background-color: rgba(128, 0, 128, 0.2); border: 2px dashed rgba(128, 0, 128, 0.5); box-sizing: border-box; z-index: 0; }
+        #vendor-npc { position: absolute; top: 400px; left: 55px; width: 40px; height: 40px; background-color: #8a2be2; border: 2px solid #4b0082; border-radius: 3px; z-index: 5; cursor: pointer; }
+        .ghost { opacity: 0.5; filter: grayscale(80%); cursor: default !important; }
+        .name-tag { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background-color: rgba(0, 0, 0, 0.7); color: white; padding: 2px 5px; font-size: 12px; white-space: nowrap; margin-bottom: 15px; opacity: 1; transition: opacity 0.5s ease-in-out; -webkit-user-select: none; user-select: none; pointer-events: none; }
+        .speech-bubble { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 35px; background-color: rgba(255, 255, 255, 0.9); color: #111; padding: 5px 10px; border-radius: 10px; font-size: 14px; width: 100px; text-align: left; opacity: 0; transition: opacity 0.3s ease-in-out; pointer-events: none; white-space: normal; overflow-wrap: break-word; }
+        .in-combat .name-tag { opacity: 0; }
+        .health-bar { position: absolute; bottom: -15px; left: 50%; transform: translateX(-50%); width: 34px; height: 5px; background-color: #555; border: 1px solid #111; }
+        .health-bar-inner { width: 100%; height: 100%; background-color: #7ed321; transition: width 0.2s linear; }
+        .player-object.speed-buff { box-shadow: 0 0 15px 5px #4a90e2; }
+        .player-object.damage-buff { box-shadow: 0 0 15px 5px #e24a4a; }
+        .poisoned { box-shadow: 0 0 15px 5px #4CAF50; }
+        #player-stats { color: #f0e68c; padding: 4px; display: flex; justify-content: space-around; font-size: 16px; border-bottom: 1px solid #444; flex-wrap: wrap; gap: 4px; }
+        #chat-log { flex-grow: 1; overflow-y: scroll; background-color: #1e1e1e; padding: 5px; font-size: 14px; text-align: left; }
+        #chat-log p { margin: 0 0 4px 0; }
+        .system-msg { color: #88aaff; font-style: italic; }
+        .my-msg { color: #aaeebb; }
+        .their-msg { color: #ffb4b4; }
+        #chat-input { border: 1px solid #666; background-color: #333; color: #fff; padding: 8px; margin-top: 5px; outline: none; width: calc(100% - 18px); }
+        #vendor-menu { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #2a2a2a; border: 2px solid #666; padding: 20px; z-index: 100; box-shadow: 0 0 20px black; }
+        #vendor-menu h3 { margin-top: 0; }
+        #vendor-menu table { border-collapse: collapse; width: 100%; }
+        #vendor-menu td, #vendor-menu th { border: 1px solid #444; padding: 8px; text-align: left; }
+        #vendor-menu button { background-color: #4a90e2; color: white; border: none; padding: 5px 10px; cursor: pointer; }
+        #vendor-menu button:hover { background-color: #6aa0e5; }
+        #close-vendor-btn { background-color: #d0021b; float: right; }
+        .damage-flash { animation: damage-shake 0.4s cubic-bezier(.36,.07,.19,.97); }
+        @keyframes damage-shake { 0%, 100% { filter: none; } 50% { filter: brightness(1.8) drop-shadow(0 0 3px #ff4d4d); } }
+        .melee-attack-lunge { animation: melee-lunge 0.3s ease-out; }
+        @keyframes melee-lunge { 0% { transform: scale(1); } 50% { transform: scale(1.1) translateY(-2px); } 100% { transform: scale(1); } }
+        #target-display { display: none; padding: 5px; background-color: #111; border-bottom: 1px solid #444; text-align: center; color: #ffdddd; font-size: 16px; }
+        #target-health-bar { width: 150px; height: 10px; background-color: #555; border: 1px solid #111; margin: 4px auto 0 auto; }
+        #target-health-bar-inner { width: 100%; height: 100%; background-color: #d0021b; transition: width 0.2s linear; }
+        .targeted-entity { box-shadow: 0 0 15px 5px #f0e68c !important; border-radius: 50%; }
+        .npc-object.targeted-entity { border-radius: 10px; }
+        #player-mana { color: #88aaff; }
+        .spell-text { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 40px; padding: 3px 8px; background-color: rgba(60, 0, 100, 0.8); color: #f0e68c; font-size: 14px; font-weight: bold; white-space: nowrap; border-radius: 5px; border: 1px solid #4b0082; opacity: 0; transition: opacity 0.3s ease-in-out, margin-bottom 0.3s ease-in-out; pointer-events: none; z-index: 25; }
+        .spell-projectile { position: absolute; width: 20px; height: 20px; text-align: center; line-height: 20px; font-size: 20px; pointer-events: none; z-index: 50; transition: transform 0.2s; }
+        .fizzle-effect { position: absolute; width: 40px; height: 40px; background-color: #888; border-radius: 50%; pointer-events: none; z-index: 99; animation: smoke-puff 0.7s ease-out forwards; }
+        @keyframes smoke-puff { from { transform: scale(0.2); opacity: 0.7; } to { transform: scale(1.3); opacity: 0; } }
+        #sailing-boat { position: absolute; width: 60px; height: 25px; background-color: #8B4513; border: 2px solid #5C2E00; border-bottom-left-radius: 40%; border-bottom-right-radius: 40%; z-index: 2; transition: transform 0.5s ease-in-out; }
+        #sailing-boat::before { content: ''; position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); width: 6px; height: 50px; background-color: #5C2E00; }
+        #sailing-boat::after { content: ''; position: absolute; bottom: 25px; left: 50%; width: 35px; height: 40px; background-color: #f5f5dc; clip-path: polygon(0 0, 100% 50%, 0 100%); }
+        /* mobile controls */
+        #touchUI { position: absolute; inset: 0; z-index: 20; pointer-events: none; display: none; }
+        #joy { position: absolute; left: max(20px, env(safe-area-inset-left)); bottom: max(24px, env(safe-area-inset-bottom)); width: 124px; height: 124px; border-radius: 50%; background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.18); pointer-events: auto; touch-action: none; }
+        #joyKnob { position: absolute; left: 42px; top: 42px; width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.5); }
+        #mobBtns { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: max(24px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(2, 56px); gap: 8px; pointer-events: auto; }
+        #mobBtns button { width: 56px; height: 56px; border-radius: 12px; border: 0; font-size: 12px; font-weight: 800; color: #fff; opacity: .82; }
+        #mobAtk { background: rgba(210,40,60,.7); grid-column: span 2; height: 48px; }
+        #mobTgt { background: rgba(70,90,200,.7); }
+        #mobSp1 { background: rgba(120,40,180,.7); }
+        #mobSp2 { background: rgba(200,170,40,.7); }
+        #mobSp3 { background: rgba(120,200,230,.7); }
+        #mobSp4 { background: rgba(230,90,20,.7); }
+        @media (hover: none) and (pointer: coarse) { #touchUI { display: block; } }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
 </head>
 <body>
-    <div id="gameCanvas"></div>
-    <button class="menu-button">☰ Menu</button>
-    <div class="menu-panel">
-        <div class="menu-title">Game Controls</div>
-        <div class="menu-content">
-            <strong style="color: #4169E1;">You are the BLUE wizard!</strong><br><br>
-            • Hold left mouse button to move your character<br>
-            • Click on the red enemy to target/untarget them (targeting persists while moving)<br>
-            • Press R to cast Magic Arrow while moving (costs 20 mana)<br>
-            • Press T to cast Lightning while moving (costs 30 mana)<br>
-            • Press F to cast Flame Strike while moving (costs 40 mana)<br>
-            • Use walls and houses for cover - spells can't pass through them!<br>
-            • You can move and cast spells at the same time!<br>
-            • Be careful not to cast too quickly or your spell will fizzle!
+    <div id="login-screen" class="screen">
+        <h2>Ultima Brawler</h2>
+        <input type="text" id="player-name-input" placeholder="Enter Your Name">
+        <br>
+        <button id="join-game-btn">Find or Create Game</button>
+        <button id="observe-game-btn">👁 Observe (Spectate)</button>
+        <p id="status-message">Initializing...</p>
+    </div>
+
+    <div id="game-container" class="screen">
+        <div id="game-world">
+            <div id="world-container">
+                <div id="water-north" class="map-feature"></div>
+                <div id="britain-bridge" class="map-feature"><div id="bridge-planks"></div></div>
+                <div id="water-south" class="map-feature"></div>
+                <div id="idle-player-area" class="map-feature"></div>
+                <div id="shrine"></div>
+                <div id="safe-zone"></div>
+                <div id="vendor-npc" title="Potion Vendor"></div>
+                <div id="bank" class="building"></div>
+                <div id="blacksmith" class="building"><span class="chimney"></span></div>
+                <div id="healers-hut" class="building"></div>
+                <div id="sailing-boat" class="map-feature"></div>
+            </div>
+            <div id="vendor-menu">
+                <h3>Potion Vendor</h3><button id="close-vendor-btn">X</button>
+                <table>
+                    <thead><tr><th>Item</th><th>Description</th><th>Cost</th><th>Buy</th></tr></thead>
+                    <tbody>
+                        <tr><td>Healing Potion</td><td>Restores 40 health. (Press 6)</td><td>50 G</td><td><button class="buy-btn" data-item="health_potion">Buy</button></td></tr>
+                        <tr><td>Speed Potion</td><td>+50% speed for 20s.</td><td>75 G</td><td><button class="buy-btn" data-item="speed_potion">Buy</button></td></tr>
+                        <tr><td>Damage Potion</td><td>+5 damage for 20s.</td><td>100 G</td><td><button class="buy-btn" data-item="damage_potion">Buy</button></td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="touchUI">
+                <div id="joy"><div id="joyKnob"></div></div>
+                <div id="mobBtns">
+                    <button id="mobAtk">ATK</button>
+                    <button id="mobTgt">TARGET</button>
+                    <button id="mobSp1">PSN</button>
+                    <button id="mobSp2">LIT</button>
+                    <button id="mobSp3">ARR</button>
+                    <button id="mobSp4">FLM</button>
+                </div>
+            </div>
+        </div>
+        <div id="ui-panel">
+            <div id="player-stats">
+                <span id="player-gold">Gold: 0</span>
+                <span id="player-mana">Mana: 100</span>
+                <span id="player-inventory"></span>
+            </div>
+            <div id="target-display">
+                <span id="target-name"></span>
+                <div id="target-health-bar"><div id="target-health-bar-inner"></div></div>
+            </div>
+            <div id="chat-log"></div>
+            <input type="text" id="chat-input" placeholder="Press Enter to chat... (try /top)" autocomplete="off">
+        </div>
+        <div id="obs-controls">
+            <div id="obs-msg">👁 Spectating — drag the D-pad to roam, tap Fit Map for the whole realm</div>
+            <div id="obs-dpad">
+                <button id="obs-up" aria-label="up">▲</button>
+                <button id="obs-left" aria-label="left">◀</button>
+                <button id="obs-right" aria-label="right">▶</button>
+                <button id="obs-down" aria-label="down">▼</button>
+            </div>
+            <div id="obs-zoom">
+                <button id="obs-fit">Fit Map</button>
+                <button id="obs-reset">1×</button>
+            </div>
         </div>
     </div>
 
     <script>
-        // Menu toggle functionality
-        document.querySelector('.menu-button').addEventListener('click', () => {
-            const menu = document.querySelector('.menu-panel');
-            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-        });
+    /* Minimal MQTT-over-WebSocket client (MQTT 3.1.1, no external lib) */
+    var MQTT = (function () {
+        function Client(url, clientId) {
+            this.url = url; this.id = clientId || ('m' + Math.random().toString(36).slice(2));
+            this.onConnected = this.onConnectionLost = this.onMessageArrived = function(){};
+            this._qos = {}; this._connected = false; this._buf = null; this._pos = 0;
+        }
+        Client.prototype.connect = function (opts) {
+            var self = this; opts = opts || {};
+            try { this.ws = new WebSocket(this.url, 'mqtt'); } catch (e) { if (opts.onFailure) opts.onFailure(e); return; }
+            this.ws.binaryType = 'arraybuffer';
+            this.ws.onopen = function () {
+                var p = [0x10]; // CONNECT type, remLen filled next
+                var u = str2bytes(self.id);
+                var keep = opts.keepAliveInterval || 30;
+                var varhdr = [0x00, 0x04].concat(str2bytes('MQTT')).concat([0x04]); // level 4
+                var h = 0x02; // clean session
+                h |= (self.u ? 0x80 : 0); h |= (self.p ? 0x40 : 0);
+                varhdr.push(h, (keep >> 8) & 0xff, keep & 0xff);
+                if (self.u) { var ub = str2bytes(self.u); varhdr.push((ub.length >> 8) & 0xff, ub.length & 0xff); for (var i=0;i<ub.length;i++) varhdr.push(ub[i]); }
+                if (self.p) { var pb = str2bytes(self.p); varhdr.push((pb.length >> 8) & 0xff, pb.length & 0xff); for (var j=0;j<pb.length;j++) varhdr.push(pb[j]); }
+                varhdr.push((u.length >> 8) & 0xff, u.length & 0xff); for (var k=0;k<u.length;k++) varhdr.push(u[k]);
+                var pkt = p.concat([varhdr.length]).concat(varhdr);
+                self.ws.send(new Uint8Array(pkt));
+            };
+            this.ws.onmessage = function (ev) {
+                var data = new Uint8Array(ev.data); self._feed(data);
+            };
+            this.ws.onclose = function () { if (self._connected) self.onConnectionLost({}); self._connected = false; };
+            this.ws.onerror = function (e) { if (opts.onFailure) opts.onFailure(e); };
+        };
+        Client.prototype._feed = function (data) {
+            if (this._buf) { var merged = new Uint8Array(this._buf.length + data.length); merged.set(this._buf); merged.set(data, this._buf.length); data = merged; }
+            var i = 0;
+            while (i + 1 < data.length) {
+                var type = data[i] >> 4; var len = data[i + 1]; var hdr = 2;
+                if (i + hdr + len > data.length) break;
+                var payload = data.subarray(i + hdr, i + hdr + len);
+                if (type === 2) { // CONNACK
+                    this._connected = true; this.onConnected();
+                } else if (type === 3) { // PUBLISH
+                    var qos = (data[i] >> 1) & 0x03; var dup = (data[i] >> 3) & 1;
+                    var tlen = (payload[0] << 8) | payload[1]; var pos = 2;
+                    var topic = bytes2str(payload.subarray(pos, pos + tlen)); pos += tlen;
+                    var pid = 0;
+                    if (qos > 0) { pid = (payload[pos] << 8) | payload[pos + 1]; pos += 2; }
+                    var msg = { destinationName: topic, payloadString: bytes2str(payload.subarray(pos)) };
+                    if (qos === 1) this._sendAck(0x40, pid);
+                    this.onMessageArrived(msg);
+                } else if (type === 9) { // SUBACK
+                    // ok
+                }
+                i += hdr + len;
+            }
+            this._buf = (i < data.length) ? data.subarray(i) : null;
+        };
+        Client.prototype._sendAck = function (type, pid) {
+            if (!this.ws || this.ws.readyState !== 1) return;
+            this.ws.send(new Uint8Array([type, 0x02, (pid >> 8) & 0xff, pid & 0xff]));
+        };
+        Client.prototype.subscribe = function (topic) {
+            if (!this.ws || this.ws.readyState !== 1) return;
+            var t = str2bytes(topic);
+            // payload: packetId(2) + topicLen(2) + topic + qos(1)
+            var body = [0x00, 0x01, (t.length >> 8) & 0xff, t.length & 0xff].concat(t).concat([0x00]);
+            var pkt = [0x82, body.length].concat(body);
+            this.ws.send(new Uint8Array(pkt));
+        };
+        Client.prototype.publish = function (msg) {
+            if (!this.ws || this.ws.readyState !== 1) return;
+            var t = str2bytes(msg.destinationName); var p = str2bytes(msg.payloadString || '');
+            var len = 2 + t.length + p.length;
+            var pkt = [0x30, len, (t.length >> 8) & 0xff, t.length & 0xff].concat(t).concat(p);
+            this.ws.send(new Uint8Array(pkt));
+        };
+        function str2bytes(s) { var o = []; for (var i=0;i<s.length;i++) { var c = s.charCodeAt(i); if (c < 128) o.push(c); else { o.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f)); } } return o; }
+        function bytes2str(b) { var s = ''; for (var i=0;i<b.length;i++) s += String.fromCharCode(b[i]); return s; }
+        return { Client: Client };
+    })();
     </script>
+    <script>
+        (function () {
+            'use strict';
 
-    <script type="module" src="src/js/core/game.js"></script>
+        /* ============================ CONFIG ============================ */
+        const C = {
+            HOST_ID: 'ultima-brawler-game-host-v2',
+            ROOM: 'ultima-brawler-lobby',
+            MQTT_WS: 'wss://broker.emqx.io:8084/mqtt',
+            SOLO_PEER: 'ultima-brawler-solo-',
+            WORLD_W: 2200, WORLD_H: 1500,
+            BRIDGE_START_X: 700, BRIDGE_TOP_Y: 650, BRIDGE_BOTTOM_Y: 850,
+            PLAYER_SIZE: 30, PLAYER_RADIUS: 15, MAX_HEALTH: 100, BASE_SPEED: 8, BASE_DMG: 10,
+            ATTACK_RANGE: 60, SLIME_GOLD: 10, GOLD_SIZE: 15, GOLD_RADIUS: 40, ATTACK_CD: 1000,
+            SLIME_HP: 30, SLIME_DMG: 5, SLIME_SPEED: 2, SLIME_AGGRO: 200, SLIME_ATK_RANGE: 40, MAX_NPCS: 10,
+            MAGE_HP: 60, MAGE_DMG: 12, MAGE_SPEED: 1.6, MAGE_AGGRO: 380, MAGE_CAST_RANGE: 320, MAGE_KITE: 140, MAGE_CAST_CD: 2600, MAGE_GOLD: 40, MAX_MAGES: 2,
+            SHRINE_X: 45, SHRINE_Y: 720, SHRINE_SIZE: 60, SHRINE_R: 30,
+            RES_TIME: 3000, SAFE_X0: 0, SAFE_X1: 150,
+            COMBAT_TO: 5000, IDLE_TO: 30000,
+            IDLE_ZONE: { x: 10, y: 10, w: 130, h: 200 },
+            VENDOR_X: 55, VENDOR_Y: 400, VENDOR_SIZE: 40, VENDOR_RANGE: 80,
+            HEAL_POT: 40, BUFF_DUR: 20000,
+            MAX_MANA: 100, MANA_REGEN: 1, MANA_INT: 1000,
+            SPELL_RANGE: 350, PROJ_SPEED: 600, INTERP: 0.2,
+            BUILDINGS: [
+                { id: 'bank', x: 300, y: 520, width: 160, height: 100 },
+                { id: 'blacksmith', x: 500, y: 500, width: 120, height: 120 },
+                { id: 'healers-hut', x: 180, y: 530, width: 80, height: 70 }
+            ],
+            VENDOR_ITEMS: { health_potion: { cost: 50 }, speed_potion: { cost: 75 }, damage_potion: { cost: 100 } },
+            SPELLS: {
+                poison: { name: 'Poison', words: 'In Nox', manaCost: 9, castTime: 1500, damage: 0, key: '1' },
+                lightning: { name: 'Lightning', words: 'Por Ort Grav', manaCost: 10, castTime: 2200, damage: 12, key: '2' },
+                magic_arrow: { name: 'Magic Arrow', words: 'In Por Ylem', manaCost: 4, castTime: 700, damage: 1, key: '3' },
+                flamestrike: { name: 'Flamestrike', words: 'Kal Vas Flam', manaCost: 40, castTime: 3500, damage: 25, key: '4' }
+            },
+            TITLES: {
+                'the Victim': { req: 'deaths', val: 5 },
+                'the Unlucky': { req: 'deaths', val: 15 },
+                'the Hunter': { req: 'pveKills', val: 10 },
+                'the Exterminator': { req: 'pveKills', val: 50 },
+                'the Brawler': { req: 'pvpKills', val: 3 },
+                'the Duelist': { req: 'pvpKills', val: 10 },
+                'the Murderer': { req: 'pvpKills', val: 25 }
+            }
+        };
+
+        /* ============================ UTIL ============================ */
+        const Util = {
+            clamp: (v, a, b) => Math.max(a, Math.min(b, v)),
+            dist: (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by),
+            el: (id) => document.getElementById(id),
+            make: (cls, parent) => { const e = document.createElement('div'); if (cls) e.className = cls; if (parent) parent.appendChild(e); return e; },
+            inWater: (x, y) => {
+                if (x < C.BRIDGE_START_X - C.PLAYER_SIZE) return false;
+                if (y < C.BRIDGE_TOP_Y || y + C.PLAYER_SIZE > C.BRIDGE_BOTTOM_Y) return true;
+                return false;
+            },
+            inSafe: (x) => x >= C.SAFE_X0 && x < C.SAFE_X1,
+            inBuilding: (x, y) => C.BUILDINGS.some(b => x < b.x + b.width && x + C.PLAYER_SIZE > b.x && y < b.y + b.height && y + C.PLAYER_SIZE > b.y),
+            safeSpawn: () => {
+                let x, y;
+                do { x = Math.random() * (C.WORLD_W - C.PLAYER_SIZE); y = Math.random() * (C.WORLD_H - C.PLAYER_SIZE); }
+                while (Util.inWater(x, y) || Util.inSafe(x) || Util.inBuilding(x, y));
+                return { x, y };
+            },
+            lineHit: (p1, p2, p3, p4) => {
+                const den = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
+                if (den === 0) return false;
+                const t = ((p1.x - p3.x) * (p3.y - p4.y) - (p1.y - p3.y) * (p3.x - p4.x)) / den;
+                const u = -((p1.x - p2.x) * (p1.y - p3.y) - (p1.y - p2.y) * (p1.x - p3.x)) / den;
+                return t > 0 && t < 1 && u > 0 && u < 1;
+            },
+            losClear: (s, e) => !C.BUILDINGS.some(b =>
+                Util.lineHit(s, e, { x: b.x, y: b.y }, { x: b.x + b.width, y: b.y }) ||
+                Util.lineHit(s, e, { x: b.x + b.width, y: b.y }, { x: b.x + b.width, y: b.y + b.height }) ||
+                Util.lineHit(s, e, { x: b.x + b.width, y: b.y + b.height }, { x: b.x, y: b.y + b.height }) ||
+                Util.lineHit(s, e, { x: b.x, y: b.y + b.height }, { x: b.x, y: b.y }))
+        };
+
+        /* ============================ DOM ============================ */
+        const D = {
+            login: Util.el('login-screen'), container: Util.el('game-container'),
+            nameInput: Util.el('player-name-input'), joinBtn: Util.el('join-game-btn'), observeBtn: Util.el('observe-game-btn'), status: Util.el('status-message'),
+            world: Util.el('game-world'), worldC: Util.el('world-container'),
+            chat: Util.el('chat-log'), chatIn: Util.el('chat-input'),
+            gold: Util.el('player-gold'), mana: Util.el('player-mana'), inv: Util.el('player-inventory'),
+            vendor: Util.el('vendor-npc'), vendorMenu: Util.el('vendor-menu'), closeVendor: Util.el('close-vendor-btn'),
+            tgtDisplay: Util.el('target-display'), tgtName: Util.el('target-name'), tgtBar: Util.el('target-health-bar-inner'),
+            obsControls: Util.el('obs-controls'), obsFit: Util.el('obs-fit'), obsReset: Util.el('obs-reset'), boat: Util.el('sailing-boat')
+        };
+
+        /* ============================ STATE ============================ */
+        const S = {
+            peer: null, localId: null, isHost: false,
+            players: {}, conns: {}, npcs: {}, items: {}, projectiles: {},
+            camX: 0, camY: 0,
+            keys: {}, attackCD: false,
+            mouseDown: false, moveMouse: false, mouseTarget: { x: null, y: null },
+            autoAttack: false, targetId: null,
+            observer: false, obsX: 1100, obsY: 750, obsZoom: 1,
+            boatX: 800, boatY: 300, boatDir: 1
+        };
+
+        /* ============================ CHAT ============================ */
+        const Chat = {
+            log: (msg, sender) => {
+                const p = document.createElement('p');
+                if (sender === 'system') { p.className = 'system-msg'; p.innerHTML = msg.replace(/\n/g, '<br>'); }
+                else {
+                    const isLocal = S.localId && S.players[S.localId] && sender === S.players[S.localId].name;
+                    p.className = isLocal ? 'my-msg' : 'their-msg';
+                    p.textContent = `[${sender}]: ${msg}`;
+                }
+                D.chat.appendChild(p); D.chat.scrollTop = D.chat.scrollHeight;
+            },
+            bubble: (id, msg) => {
+                const pl = S.players[id]; if (!pl || !pl.bubble) return;
+                if (pl.bubbleTO) clearTimeout(pl.bubbleTO);
+                pl.bubble.textContent = msg; pl.bubble.style.opacity = '1';
+                pl.bubbleTO = setTimeout(() => { pl.bubble.style.opacity = '0'; }, 4000);
+            }
+        };
+
+        /* ============================ ENTITIES ============================ */
+        const Entities = {
+            createPlayer: (id, name, isLocal, init) => {
+                init = init || {};
+                if (S.players[id]) return S.players[id];
+                const sp = init.x != null ? { x: init.x, y: init.y } : Util.safeSpawn();
+                const p = {
+                    id, name,
+                    el: Util.make('game-object player-object', D.worldC),
+                    nameTag: Util.make('name-tag', null),
+                    healthBar: Util.make('health-bar', null),
+                    healthInner: Util.make('health-bar-inner', null),
+                    bubble: Util.make('speech-bubble', null),
+                    spellText: Util.make('spell-text', null),
+                    x: sp.x, y: sp.y, targetX: sp.x, targetY: sp.y,
+                    health: init.health ?? C.MAX_HEALTH, mana: init.mana ?? C.MAX_MANA, maxMana: C.MAX_MANA,
+                    isCasting: false, castingSpell: null, castingTarget: null, castingTO: null,
+                    isDead: init.isDead ?? false, gold: init.gold ?? 0,
+                    inv: init.inv ?? { health_potion: 0, speed_potion: 0, damage_potion: 0 },
+                    buffs: init.buffs ?? { speed: { active: false, endTime: 0 }, damage: { active: false, endTime: 0 }, poison: { active: false } },
+                    title: init.title ?? '', pvpKills: init.pvpKills ?? 0, pveKills: init.pveKills ?? 0, deaths: init.deaths ?? 0,
+                    resTime: null, inCombat: false, lastCombat: null, lastInput: Date.now(), idleKicked: false, isHost: init.isHost ?? false
+                };
+                p.el.dataset.id = id;
+                p.healthBar.appendChild(p.healthInner);
+                p.el.appendChild(p.nameTag); p.el.appendChild(p.healthBar); p.el.appendChild(p.bubble); p.el.appendChild(p.spellText);
+                p.el.classList.add(isLocal ? 'local-player' : 'remote-player');
+                S.players[id] = p;
+                Chat.log(`${name} has entered the realm.`, 'system');
+                return p;
+            },
+            removePlayer: (id) => { if (S.players[id]) { S.players[id].el.remove(); delete S.players[id]; } },
+            createNpc: (d) => {
+                if (S.npcs[d.id]) return;
+                const n = {
+                    id: d.id, el: Util.make('game-object npc-object', D.worldC),
+                    healthBar: Util.make('health-bar', null), healthInner: Util.make('health-bar-inner', null),
+                    x: d.x, y: d.y, health: d.health, maxHealth: d.maxHealth, isDead: d.isDead,
+                    kind: d.kind || 'slime', name: d.name || null,
+                    buffs: { poison: { active: false } }, aiCD: false, castCD: false
+                };
+                if (n.kind === 'mage') n.el.classList.add('mage-npc');
+                n.el.dataset.id = d.id;
+                n.healthBar.appendChild(n.healthInner); n.el.appendChild(n.healthBar);
+                S.npcs[d.id] = n;
+            },
+            removeNpc: (id) => { if (S.npcs[id]) { S.npcs[id].el.remove(); delete S.npcs[id]; } },
+            createItem: (it) => {
+                if (S.items[it.id]) return;
+                const el = Util.make('game-object gold-pile', D.worldC);
+                el.style.left = it.x + 'px'; el.style.top = it.y + 'px'; el.dataset.id = it.id;
+                S.items[it.id] = Object.assign({}, it, { el });
+            },
+            removeItem: (id) => { if (S.items[id]) { S.items[id].el.remove(); delete S.items[id]; } },
+            serialPlayer: (p) => ({ id: p.id, name: p.name, x: p.x, y: p.y, health: p.health, mana: p.mana, maxMana: p.maxMana, isDead: p.isDead, gold: p.gold, inv: p.inv, buffs: p.buffs, title: p.title, pvpKills: p.pvpKills, pveKills: p.pveKills, deaths: p.deaths, isHost: p.isHost }),
+            serialNpc: (n) => ({ id: n.id, x: n.x, y: n.y, health: n.health, maxHealth: n.maxHealth, isDead: n.isDead, kind: n.kind, name: n.name })
+        };
+
+        /* ============================ SPELLS ============================ */
+        const Spells = {
+            serialize: () => {
+                const out = {};
+                for (const k in C.SPELLS) out[k] = Object.assign({}, C.SPELLS[k]);
+                return out;
+            },
+            byKey: (key) => Object.keys(C.SPELLS).find(id => C.SPELLS[id].key === key),
+            // resolve a finished cast into damage/effect (shared by host resolution)
+            resolve: (caster, target, spellId) => {
+                const spell = C.SPELLS[spellId];
+                if (!spell || !target || target.isDead) return null;
+                const isPlayer = !!target.name;
+                if (spellId === 'poison') {
+                    target.buffs.poison = { active: true, endTime: Date.now() + 10000, lastTick: Date.now(), tickInt: 2000, tickDmg: 2, casterId: caster.id };
+                    Combat.announce(`${caster.name}'s poison spell envelops ${target.name || 'a slime'}!`);
+                    Net.broadcast({ type: 'buff-update', playerId: target.id, buffs: target.buffs });
+                    return { kind: 'poison' };
+                }
+                if (isPlayer && target.isCasting) Combat.interrupt(target, 'interrupted by a spell');
+                target.health -= spell.damage;
+                Combat.announce(`${caster.name}'s ${spell.name} hits ${target.name || 'a slime'} for ${spell.damage} damage!`);
+                if (target.health <= 0) {
+                    target.health = 0; target.isDead = true;
+                    const tname = target.name || 'a slime';
+                    Combat.announce(`${tname} has been slain!`);
+                    if (isPlayer) { target.deaths++; Combat.awardTitle(target); caster.pvpKills++; Combat.awardTitle(caster); Combat.dropGold(target, caster); }
+                    else { caster.pveKills++; Combat.awardTitle(caster); Combat.dropSlimeGold(target); }
+                }
+                const t = isPlayer ? 'update-health' : 'npc-update-health';
+                Net.broadcast({ type: t, id: target.id, health: target.health, isDead: target.isDead, attackerId: caster.id });
+                if (Net.isHost()) Util.trigger(target.el, 'damage-flash');
+                return { kind: spellId };
+            }
+        };
+
+        /* ============================ COMBAT ============================ */
+        const Combat = {
+            inCombat: (p) => { if (!p) return; p.lastCombat = Date.now(); if (!p.inCombat) { p.inCombat = true; Net.broadcast({ type: 'combat-status', playerId: p.id, inCombat: true }); p.el.classList.add('in-combat'); } },
+            tickCombat: () => { if (!Net.isHost()) return; const now = Date.now(); for (const id in S.players) { const p = S.players[id]; if (p.inCombat && now - p.lastCombat > C.COMBAT_TO) { p.inCombat = false; p.lastCombat = null; Net.broadcast({ type: 'combat-status', playerId: id, inCombat: false }); p.el.classList.remove('in-combat'); } } },
+            announce: (m) => { if (!Net.isHost()) return; Chat.log(m, 'system'); Net.broadcast({ type: 'chat', name: 'system', message: m }); },
+            msgPlayer: (id, m) => { if (!Net.isHost()) return; if (id === S.localId) Chat.log(m, 'system'); else if (S.conns[id]) S.conns[id].send({ type: 'chat', name: 'system', message: m }); },
+            interrupt: (p, reason) => {
+                if (!p || !p.isCasting) return;
+                clearTimeout(p.castingTO);
+                const name = C.SPELLS[p.castingSpell] ? C.SPELLS[p.castingSpell].name : 'spell';
+                p.isCasting = false;
+                Combat.msgPlayer(p.id, `Your ${name} spell was ${reason}!`);
+                Net.broadcast({ type: 'cast-finished', casterId: p.id });
+                Net.broadcast({ type: 'fizzle', casterId: p.id });
+                if (p.spellText) { p.spellText.style.opacity = '0'; p.spellText.style.marginBottom = '40px'; }
+                if (Net.isHost()) FX.fizzle(p);
+            },
+            attack: (targetId, targetType, fromLocal) => {
+                const me = S.players[S.localId];
+                if (!me || me.isDead || S.attackCD) return;
+                if (Util.inSafe(me.x + C.PLAYER_RADIUS) && Util.inSafe(me.y + C.PLAYER_RADIUS)) { /* shrine-safe handled elsewhere */ }
+                const target = targetType === 'player' ? S.players[targetId] : S.npcs[targetId];
+                if (!target || target.isDead) { Game.clearTarget(); return; }
+                const d = Util.dist(me.x + C.PLAYER_RADIUS, me.y + C.PLAYER_RADIUS, target.x + C.PLAYER_RADIUS, target.y + C.PLAYER_RADIUS);
+                if (d > C.ATTACK_RANGE) { Chat.log('You are too far away to attack.', 'system'); return; }
+                Util.trigger(me.el, 'melee-attack-lunge');
+                S.attackCD = true; setTimeout(() => { S.attackCD = false; }, C.ATTACK_CD);
+                if (fromLocal) Net.send({ type: 'attack', targetId, targetType });
+            },
+            playerDeath: (p, killer) => {
+                if (!Net.isHost() || p.gold <= 0) return;
+                let drop = killer.id.startsWith('npc_') ? Math.floor(p.gold / 2) : p.gold;
+                if (drop > 0) {
+                    p.gold -= drop; Net.broadcast({ type: 'update-gold', playerId: p.id, gold: p.gold });
+                    const a = Math.random() * 2 * Math.PI, r = Math.random() * C.GOLD_RADIUS;
+                    const ix = p.x + C.PLAYER_RADIUS + Math.cos(a) * r - C.GOLD_SIZE / 2;
+                    const iy = p.y + C.PLAYER_RADIUS + Math.sin(a) * r - C.GOLD_SIZE / 2;
+                    const item = { id: `gold_${Date.now()}_${Math.random()}`, type: 'gold', amount: drop, x: ix, y: iy };
+                    Entities.createItem(item); Net.broadcast({ type: 'spawn-item', item });
+                    Combat.announce(`${p.name} dropped ${drop} gold!`);
+                }
+            },
+            dropGold: (p, killer) => Combat.playerDeath(p, killer),
+            dropSlimeGold: (npc) => {
+                const isMage = npc.kind === 'mage';
+                const amount = isMage ? C.MAGE_GOLD : C.SLIME_GOLD;
+                const item = { id: `gold_${Date.now()}_${Math.random()}`, type: 'gold', amount, x: npc.x + (C.PLAYER_RADIUS - C.GOLD_SIZE / 2), y: npc.y + (C.PLAYER_RADIUS - C.GOLD_SIZE / 2) };
+                Entities.createItem(item); Net.broadcast({ type: 'spawn-item', item });
+                if (isMage) Combat.announce(`${npc.name || 'A dark mage'} has been vanquished!`);
+                setTimeout(() => { if (S.npcs[npc.id]) { Entities.removeNpc(npc.id); Net.broadcast({ type: 'despawn-npc', id: npc.id }); } }, 5000);
+                setTimeout(() => isMage ? Combat.spawnMage() : Combat.spawnNpc(), isMage ? 30000 : 20000);
+            },
+            awardTitle: (p) => {
+                if (!Net.isHost()) return;
+                let best = '';
+                for (const t in C.TITLES) if (p[C.TITLES[t].req] >= C.TITLES[t].val) best = t;
+                if (best && p.title !== best) { p.title = best; Combat.announce(`${p.name} has earned the title: ${best}!`); Net.broadcast({ type: 'title-update', playerId: p.id, title: p.title }); }
+            },
+            spawnNpc: () => {
+                if (!Net.isHost()) return;
+                const sp = Util.safeSpawn();
+                const id = `npc_${Date.now()}_${Math.random()}`;
+                const d = { id, x: sp.x, y: sp.y, health: C.SLIME_HP, maxHealth: C.SLIME_HP, isDead: false };
+                Entities.createNpc(d);
+                const n = S.npcs[id]; if (n) { n.aiCD = false; }
+                Net.broadcast({ type: 'spawn-npc', npc: Entities.serialNpc(n) });
+            },
+            spawnMage: () => {
+                if (!Net.isHost()) return;
+                // spawn out in the wilds (right of safe zone), away from spawn point
+                const id = `mage_${Date.now()}_${Math.random()}`;
+                const names = ['Mordath the Dark', 'Vex Nightweaver', 'Balthor the Corrupt', 'Silas Grimwald'];
+                const x = C.SAFE_X1 + 200 + Math.random() * (C.WORLD_W - C.SAFE_X1 - 400);
+                const y = 100 + Math.random() * (C.WORLD_H - 200);
+                const d = { id, x, y, health: C.MAGE_HP, maxHealth: C.MAGE_HP, isDead: false, kind: 'mage', name: names[Math.floor(Math.random() * names.length)] };
+                Entities.createNpc(d);
+                const n = S.npcs[id]; if (n) { n.aiCD = false; n.castCD = false; }
+                Net.broadcast({ type: 'spawn-npc', npc: Entities.serialNpc(n) });
+            },
+            npcAI: () => {
+                if (!Net.isHost()) return;
+                for (const id in S.npcs) {
+                    const n = S.npcs[id]; if (n.isDead) continue;
+                    const isMage = n.kind === 'mage';
+                    const aggro = isMage ? C.MAGE_AGGRO : C.SLIME_AGGRO;
+                    let tgt = null, min = aggro;
+                    for (const pid in S.players) { const pl = S.players[pid]; if (pl.isDead || Util.inSafe(pl.x)) continue; const d = Util.dist(n.x, n.y, pl.x, pl.y); if (d < min) { min = d; tgt = pl; } }
+                    let moved = false;
+                    if (tgt && isMage) {
+                        // Mage AI: kite to keep at cast range, then cast spells
+                        let dx = tgt.x - n.x, dy = tgt.y - n.y, m = Math.hypot(dx, dy) || 1;
+                        if (min < C.MAGE_KITE) { dx = -dx; dy = -dy; } // too close: back away
+                        if (min < C.MAGE_KITE || min > C.MAGE_CAST_RANGE) {
+                            let nx = n.x + dx / m * C.MAGE_SPEED, ny = n.y + dy / m * C.MAGE_SPEED;
+                            if (Util.inBuilding(nx, n.y)) nx = n.x; if (Util.inBuilding(n.x, ny)) ny = n.y;
+                            if (!Util.inWater(nx, ny)) { n.x = nx; n.y = ny; moved = true; }
+                        }
+                        if (min <= C.MAGE_CAST_RANGE && !n.castCD) {
+                            n.castCD = true;
+                            const spells = ['magic_arrow', 'lightning', 'flamestrike'];
+                            const spellId = spells[Math.floor(Math.random() * spells.length)];
+                            n.el.classList.add('casting');
+                            Net.broadcast({ type: 'npc-cast', id: n.id, casting: true });
+                            const target = tgt;
+                            setTimeout(() => {
+                                n.el.classList.remove('casting');
+                                Net.broadcast({ type: 'npc-cast', id: n.id, casting: false });
+                                if (n.isDead || target.isDead || Util.inSafe(target.x)) return;
+                                if (Util.dist(n.x, n.y, target.x, target.y) > C.MAGE_CAST_RANGE + 60) return;
+                                const projId = `mp_${Date.now()}_${Math.random()}`;
+                                Net.broadcast({ type: 'spawn-projectile', projectileId: projId, casterId: n.id, targetId: target.id, spellId, travelTime: 500 });
+                                Game.spawnProjectile(projId, n.id, target.id, spellId, 500);
+                                Combat.inCombat(target); if (target.isCasting) Combat.interrupt(target, 'interrupted by damage');
+                                target.health -= C.MAGE_DMG;
+                                Combat.announce(`${n.name} strikes ${target.name} with ${spellId.replace('_', ' ')}!`);
+                                if (target.health <= 0) { target.health = 0; target.isDead = true; Combat.announce(`${target.name} was slain by ${n.name}!`); target.deaths++; Combat.awardTitle(target); Combat.playerDeath(target, n); }
+                                Net.broadcast({ type: 'update-health', id: target.id, health: target.health, isDead: target.isDead, attackerId: n.id });
+                                Util.trigger(target.el, 'damage-flash');
+                            }, 700);
+                            setTimeout(() => { n.castCD = false; }, C.MAGE_CAST_CD);
+                        }
+                    } else if (tgt) {
+                        if (min > C.SLIME_ATK_RANGE) {
+                            const dx = tgt.x - n.x, dy = tgt.y - n.y, m = Math.hypot(dx, dy);
+                            let nx = n.x + dx / m * C.SLIME_SPEED, ny = n.y + dy / m * C.SLIME_SPEED;
+                            if (Util.inBuilding(nx, n.y)) nx = n.x; if (Util.inBuilding(n.x, ny)) ny = n.y;
+                            if (!Util.inWater(nx, ny)) { n.x = nx; n.y = ny; moved = true; }
+                        }
+                        if (min <= C.SLIME_ATK_RANGE && !n.aiCD) {
+                            Combat.inCombat(tgt); if (tgt.isCasting) Combat.interrupt(tgt, 'interrupted by damage');
+                            tgt.health -= C.SLIME_DMG; Combat.announce(`A slime attacks ${tgt.name}!`);
+                            if (tgt.health <= 0) { tgt.health = 0; tgt.isDead = true; Combat.announce(`${tgt.name} has been slain by a slime!`); tgt.deaths++; Combat.awardTitle(tgt); Combat.playerDeath(tgt, n); }
+                            Net.broadcast({ type: 'update-health', id: tgt.id, health: tgt.health, isDead: tgt.isDead, attackerId: n.id });
+                            Util.trigger(tgt.el, 'damage-flash'); n.aiCD = true; setTimeout(() => { n.aiCD = false; }, 1000);
+                        }
+                    }
+                    if (moved) { n.x = Util.clamp(n.x, 0, C.WORLD_W - C.PLAYER_SIZE); n.y = Util.clamp(n.y, 0, C.WORLD_H - C.PLAYER_SIZE); Net.broadcast({ type: 'npc-move', id: n.id, x: n.x, y: n.y }); }
+                }
+            },
+            resurrect: () => {
+                if (!Net.isHost()) return;
+                for (const id in S.players) {
+                    const p = S.players[id];
+                    if (!p.isDead) continue;
+                    const onShrine = Util.dist(C.SHRINE_X + C.SHRINE_R, C.SHRINE_Y + C.SHRINE_R, p.x + C.PLAYER_RADIUS, p.y + C.PLAYER_RADIUS) < C.SHRINE_R;
+                    if (onShrine && !p.resTime) { p.resTime = Date.now(); Combat.msgPlayer(id, 'You feel the shrine\'s power begin to restore your life force...'); }
+                    else if (!onShrine && p.resTime) { p.resTime = null; Combat.msgPlayer(id, 'You moved away and broke the connection to the shrine.'); }
+                    else if (onShrine && p.resTime && Date.now() - p.resTime >= C.RES_TIME) { p.health = C.MAX_HEALTH; p.isDead = false; p.resTime = null; Combat.announce(`${p.name} has been resurrected!`); Net.broadcast({ type: 'update-health', id: id, health: p.health, isDead: p.isDead }); }
+                }
+            },
+            idle: () => {
+                if (!Net.isHost()) return;
+                const now = Date.now();
+                for (const id in S.players) {
+                    const p = S.players[id];
+                    if (!p.isDead && !p.idleKicked && now - p.lastInput > C.IDLE_TO) {
+                        p.idleKicked = true;
+                        p.x = C.IDLE_ZONE.x + Math.random() * (C.IDLE_ZONE.w - C.PLAYER_SIZE);
+                        p.y = C.IDLE_ZONE.y + Math.random() * (C.IDLE_ZONE.h - C.PLAYER_SIZE);
+                        Combat.announce(`${p.name} was moved to the idle area for being inactive.`);
+                        Net.broadcast({ type: 'move', id: p.id, x: p.x, y: p.y });
+                    }
+                }
+            }
+        };
+
+        /* ============================ EFFECTS ============================ */
+        const FX = {
+            fizzle: (caster) => {
+                if (!caster) return;
+                const e = Util.make('fizzle-effect', D.worldC);
+                const sz = 40, cx = caster.x + C.PLAYER_RADIUS, cy = caster.y + C.PLAYER_RADIUS;
+                e.style.left = (cx - sz / 2) + 'px'; e.style.top = (cy - sz / 2) + 'px';
+                setTimeout(() => e.remove(), 700);
+            },
+            spell: (el, id) => {
+                const e = document.createElement('div'); e.style.position = 'absolute'; e.style.pointerEvents = 'none'; e.style.zIndex = 100;
+                const map = { magic_arrow: ['➤', '#e0aaff', 30], lightning: ['⚡', '#f0e68c', 40], flamestrike: ['🔥', '#ff6a00', 50], poison: ['☠', '#4CAF50', 40] };
+                const v = map[id] || ['•', '#fff', 30];
+                e.textContent = v[0]; e.style.color = v[1]; e.style.fontSize = v[2] + 'px';
+                el.appendChild(e); setTimeout(() => e.remove(), 800);
+            }
+        };
+        Util.trigger = (el, cls) => { if (!el) return; el.classList.add(cls); setTimeout(() => el.classList.remove(cls), 500); };
+
+        /* ============================ NETWORK ============================ */
+        const Net = {
+            isHost: () => S.isHost,
+            send: (data) => { if (S.observer) return; if (S.isHost) { Net.handle(data, S.localId); } else { const h = S.conns[C.HOST_ID]; if (h && h.open) h.send(data); } },
+            broadcast: (data) => { for (const id in S.conns) { const c = S.conns[id]; if (c && c.open) c.send(data); } },
+            connect: (name) => {
+                D.status.textContent = 'Finding game...';
+                S._resolved = false; S._mqtt = null; S._hostPeerId = null;
+                const finalizeAs = (id, isHost) => {
+                    if (S._resolved) return; S._resolved = true; S.isHost = isHost; S.localId = id;
+                    if (isHost) setInterval(Net.manaRegen, C.MANA_INT);
+                    Game.finalize(name);
+                };
+                Net._finalizeAs = finalizeAs;
+                // ---- MQTT rendezvous (host discovery only; NOT game data) ----
+                try {
+                    const mqtt = new MQTT.Client(C.MQTT_WS, 'uob_' + Math.random().toString(36).slice(2));
+                    S._mqtt = mqtt;
+                    mqtt.onConnectionLost = () => {};
+                    mqtt.onMessageArrived = (msg) => {
+                        if (msg.destinationName !== C.ROOM + '/host') return;
+                        const pid = msg.payloadString;
+                        if (pid && pid !== S.localId && !S._hostPeerId && !S._resolved) {
+                            S._hostPeerId = pid;
+                            D.status.textContent = 'Joining game...';
+                            S.peer.connect(pid, { reliable: true });
+                        }
+                    };
+                    mqtt.onConnected = () => {
+                        mqtt.subscribe(C.ROOM + '/host');
+                        if (S.isHost) Net.announceHost();
+                    };
+                    mqtt.connect({ useSSL: true, keepAliveInterval: 30, reconnect: true });
+                } catch (e) { console.warn('MQTT init failed', e); }
+
+                const tryHost = () => {
+                    D.status.textContent = 'Creating game...';
+                    S.peer = new Peer(C.HOST_ID);
+                    S.peer.on('open', (id) => {
+                        finalizeAs(id, true);
+                        S.peer.on('connection', (c) => Net.setup(c));
+                        if (S._mqtt) Net.announceHost();
+                    });
+                    S.peer.on('error', (err) => {
+                        if (err.type === 'unavailable-id') {
+                            // someone already owns the host id -> join as client
+                            D.status.textContent = 'Game found! Connecting...';
+                            if (S.peer) S.peer.destroy();
+                            S.peer = new Peer();
+                            S.peer.on('open', (id) => {
+                                S.localId = id; S._resolved = true; S.isHost = false;
+                                D.status.textContent = 'Connecting to host...';
+                                const conn = S.peer.connect(C.HOST_ID, { reliable: true });
+                                Net.setup(conn, name);
+                            });
+                            S.peer.on('error', () => { if (!S._resolved) Net.solo(name); });
+                        } else if (!S._resolved) { D.status.textContent = `Error: ${err.type}. Starting solo.`; Net.solo(name); }
+                    });
+                };
+
+                // PeerJS first (gives us a local id so MQTT can exclude self)
+                S.peer = new Peer();
+                S.peer.on('open', (id) => {
+                    S.localId = id;
+                    D.status.textContent = 'Looking for host...';
+                    setTimeout(() => { if (!S._resolved) tryHost(); }, 1200); // let MQTT find an existing host first
+                });
+                S.peer.on('error', () => { if (!S._resolved) Net.solo(name); });
+                // safety: if nothing resolves, go solo
+                setTimeout(() => { if (!S._resolved && !S._hostPeerId) { D.status.textContent = 'No game found — starting solo.'; Net.solo(name); } }, 7000);
+            },
+            announceHost: () => { if (!S._mqtt) return; const m = { destinationName: C.ROOM + '/host', payloadString: S.localId }; S._mqtt.publish(m); },
+            solo: (name) => { if (S.localId && S.localId.indexOf(C.SOLO_PEER) === 0) { Net._finalizeAs(S.localId, true); return; } S.peer = new Peer(C.SOLO_PEER + Math.random().toString(36).slice(2, 8)); S.peer.on('open', (id) => Net._finalizeAs(id, true)); S.peer.on('error', () => Net._finalizeAs(C.SOLO_PEER + 'fallback', true)); },
+            observe: () => {
+                // Spectator: join an EXISTING host only; never become host/solo. No player is registered.
+                D.status.textContent = 'Finding a game to observe...';
+                S._resolved = false; S._mqtt = null; S._hostPeerId = null; S.observer = true;
+                const joinAsObserver = () => {
+                    if (S._resolved) return;
+                    S.peer = new Peer();
+                    S.peer.on('open', (id) => {
+                        S.localId = id; S._resolved = true; S.isHost = false; S.observer = true;
+                        D.status.textContent = 'Connecting to observe...';
+                        const conn = S.peer.connect(C.HOST_ID, { reliable: true });
+                        Net.setupObserver(conn);
+                    });
+                    S.peer.on('error', () => { if (!S._resolved) D.status.textContent = 'No live game found to observe. Try again shortly.'; });
+                };
+                // Try MQTT host discovery first, then direct HOST_ID connect.
+                try {
+                    const mqtt = new MQTT.Client(C.MQTT_WS, 'uobs_' + Math.random().toString(36).slice(2));
+                    S._mqtt = mqtt;
+                    mqtt.onConnectionLost = () => {};
+                    mqtt.onMessageArrived = (msg) => {
+                        if (msg.destinationName !== C.ROOM + '/host') return;
+                        const pid = msg.payloadString;
+                        if (pid && !S._hostPeerId && !S._resolved) {
+                            S._hostPeerId = pid; S._resolved = true;
+                            S.peer = new Peer();
+                            S.peer.on('open', (id) => { S.localId = id; S.isHost = false; S.observer = true; D.status.textContent = 'Connecting to observe...'; Net.setupObserver(S.peer.connect(pid, { reliable: true })); });
+                        }
+                    };
+                    mqtt.onConnected = () => { mqtt.subscribe(C.ROOM + '/host'); };
+                    mqtt.connect({ useSSL: true, keepAliveInterval: 30, reconnect: true });
+                } catch (e) { console.warn('MQTT init failed', e); }
+                // Fallback: direct connect to well-known host id after MQTT grace period.
+                setTimeout(() => { if (!S._resolved) joinAsObserver(); }, 1500);
+                setTimeout(() => { if (!S._resolved) D.status.textContent = 'No live game found to observe. Try again shortly.'; }, 8000);
+            },
+            setupObserver: (conn) => {
+                S.conns[conn.peer] = conn;
+                conn.on('data', (d) => Net.client(d));
+                conn.on('close', () => { Chat.log('The game you were observing has ended.', 'system'); });
+                conn.on('error', (e) => console.error('Observer conn error:', e));
+                conn.on('open', () => { Game.finalizeObserver(); });
+            },
+            setup: (conn, nameForClient) => {
+                S.conns[conn.peer] = conn;
+                conn.on('data', (d) => Net.handle(d, conn.peer));
+                conn.on('close', () => {
+                    const nm = S.players[conn.peer] ? S.players[conn.peer].name : (conn.peer.slice(0, 6) + '...');
+                    Chat.log(`${nm} has disconnected.`, 'system');
+                    Entities.removePlayer(conn.peer); delete S.conns[conn.peer];
+                    if (S.isHost) Net.broadcast({ type: 'disconnect', id: conn.peer });
+                });
+                conn.on('error', (e) => console.error(`Conn error ${conn.peer}:`, e));
+                if (nameForClient) conn.on('open', () => { Game.finalize(nameForClient); });
+            },
+            serialAll: () => {
+                const ps = {}; for (const id in S.players) ps[id] = Entities.serialPlayer(S.players[id]);
+                const ns = {}; for (const id in S.npcs) ns[id] = Entities.serialNpc(S.npcs[id]);
+                return { players: ps, npcs: ns, items: S.items };
+            },
+            handle: (data, senderId) => {
+                if (!S.isHost) { Net.client(data); return; }
+                const sender = S.players[senderId];
+                if (!sender && data.type !== 'sync-request' && data.type !== 'observer-sync') return;
+                switch (data.type) {
+                    case 'sync-request': {
+                        const s = Net.serialAll();
+                        S.conns[senderId].send({ type: 'sync-response', players: s.players, npcs: s.npcs, items: s.items });
+                        const np = Entities.createPlayer(senderId, data.name);
+                        Net.broadcast({ type: 'new-player', id: senderId, player: Entities.serialPlayer(np) });
+                        break;
+                    }
+                    case 'observer-sync': {
+                        // Spectator only wants world state; do NOT register them as a player.
+                        const s = Net.serialAll();
+                        const c = S.conns[senderId];
+                        if (c && c.open) c.send({ type: 'sync-response', players: s.players, npcs: s.npcs, items: s.items });
+                        break;
+                    }
+                    case 'move': {
+                        sender.x = data.x; sender.y = data.y; sender.lastInput = Date.now(); sender.idleKicked = false;
+                        Combat.pickup(sender); Net.broadcast({ type: 'move', id: senderId, x: data.x, y: data.y });
+                        break;
+                    }
+                    case 'attack': {
+                        if (sender.isDead) break;
+                        const tgt = data.targetType === 'player' ? S.players[data.targetId] : S.npcs[data.targetId];
+                        const tname = tgt ? (tgt.name || 'a slime') : 'someone';
+                        Combat.inCombat(sender);
+                        if (tgt && Util.inSafe(tgt.x)) break;
+                        if (tgt && !tgt.isDead) {
+                            if (data.targetType === 'player') { Combat.inCombat(tgt); if (tgt.isCasting) Combat.interrupt(tgt, 'interrupted by damage'); }
+                            const dmg = sender.buffs.damage.active ? C.BASE_DMG + 5 : C.BASE_DMG;
+                            tgt.health -= dmg; Combat.announce(`${sender.name} attacks ${tname}!`);
+                            if (tgt.health <= 0) {
+                                tgt.health = 0; tgt.isDead = true; Combat.announce(`${tname} has been slain!`);
+                                tgt.deaths++; Combat.awardTitle(tgt);
+                                if (data.targetType === 'player') { sender.pvpKills++; Combat.awardTitle(sender); Combat.playerDeath(tgt, sender); }
+                                else if (data.targetType === 'npc') { sender.pveKills++; Combat.awardTitle(sender); Combat.dropSlimeGold(tgt); }
+                            }
+                            const t = data.targetType === 'player' ? 'update-health' : 'npc-update-health';
+                            Net.broadcast({ type: t, id: data.targetId, health: tgt.health, isDead: tgt.isDead, attackerId: senderId });
+                            Util.trigger(tgt.el, 'damage-flash');
+                        }
+                        break;
+                    }
+                    case 'buy-item': {
+                        const it = C.VENDOR_ITEMS[data.itemId]; if (!it) break;
+                        if (sender.gold >= it.cost) { sender.gold -= it.cost; sender.inv[data.itemId] = (sender.inv[data.itemId] || 0) + 1; Combat.msgPlayer(senderId, `You purchased a ${data.itemId.replace('_', ' ')}.`); Net.broadcast({ type: 'update-gold', playerId: senderId, gold: sender.gold }); Net.broadcast({ type: 'update-inv', playerId: senderId, inv: sender.inv }); }
+                        else Combat.msgPlayer(senderId, 'You don\'t have enough gold for that.');
+                        break;
+                    }
+                    case 'use-item': {
+                        if (sender.isDead) break;
+                        if (sender.inv[data.itemId] > 0) {
+                            sender.inv[data.itemId]--;
+                            if (data.itemId === 'health_potion') { sender.health = Math.min(C.MAX_HEALTH, sender.health + C.HEAL_POT); Combat.msgPlayer(senderId, 'You feel healthier.'); Net.broadcast({ type: 'update-health', id: senderId, health: sender.health, isDead: sender.isDead }); }
+                            else if (data.itemId === 'speed_potion') { sender.buffs.speed.active = true; sender.buffs.speed.endTime = Date.now() + C.BUFF_DUR; Combat.msgPlayer(senderId, 'You feel faster!'); Net.broadcast({ type: 'buff-update', playerId: senderId, buffs: sender.buffs }); }
+                            else if (data.itemId === 'damage_potion') { sender.buffs.damage.active = true; sender.buffs.damage.endTime = Date.now() + C.BUFF_DUR; Combat.msgPlayer(senderId, 'You feel stronger!'); Net.broadcast({ type: 'buff-update', playerId: senderId, buffs: sender.buffs }); }
+                            Net.broadcast({ type: 'update-inv', playerId: senderId, inv: sender.inv });
+                        }
+                        break;
+                    }
+                    case 'chat': {
+                        if (sender) { sender.lastInput = Date.now(); sender.idleKicked = false; }
+                        if (data.message.trim().toLowerCase() === '/top') { Net.leaderboard(); }
+                        else { const cd = { type: 'chat', playerId: senderId, name: sender.name, message: data.message }; Chat.log(data.message, sender.name); Chat.bubble(senderId, data.message); Net.broadcast(cd); }
+                        break;
+                    }
+                    case 'start-cast': {
+                        if (sender.isDead || !data.targetId || !data.spellId) break;
+                        const spell = C.SPELLS[data.spellId]; const tgt = S.players[data.targetId] || S.npcs[data.targetId];
+                        if (sender.isCasting || !spell || !tgt || tgt.isDead) break;
+                        if (sender.mana < spell.manaCost) { Combat.msgPlayer(senderId, 'You don\'t have enough mana.'); break; }
+                        if (Util.dist(sender.x, sender.y, tgt.x, tgt.y) > C.SPELL_RANGE) { Combat.msgPlayer(senderId, 'Your target is too far away.'); break; }
+                        sender.isCasting = true; sender.castingSpell = data.spellId; sender.castingTarget = data.targetId; sender.mana -= spell.manaCost;
+                        Net.broadcast({ type: 'update-mana', playerId: senderId, mana: sender.mana });
+                        if (senderId === S.localId) sender.mana = sender.mana;
+                        Net.broadcast({ type: 'cast-started', casterId: senderId, spell });
+                        if (S.players[senderId]) { S.players[senderId].spellText.textContent = spell.words; S.players[senderId].spellText.style.opacity = '1'; S.players[senderId].spellText.style.marginBottom = '45px'; }
+                        sender.castingTO = setTimeout(() => {
+                            if (!sender.isCasting) return;
+                            const ft = S.players[sender.castingTarget] || S.npcs[sender.castingTarget];
+                            if (!ft || ft.isDead) { Combat.interrupt(sender, 'as the target is gone'); return; }
+                            const sc = { x: sender.x + C.PLAYER_RADIUS, y: sender.y + C.PLAYER_RADIUS };
+                            const tc = { x: ft.x + C.PLAYER_RADIUS, y: ft.y + C.PLAYER_RADIUS };
+                            if (!Util.losClear(sc, tc)) { Combat.interrupt(sender, 'as the target is not in your line of sight'); return; }
+                            sender.isCasting = false; Net.broadcast({ type: 'cast-finished', casterId: senderId });
+                            if (S.players[senderId]) { S.players[senderId].spellText.style.opacity = '0'; S.players[senderId].spellText.style.marginBottom = '40px'; }
+                            const dist = Util.dist(sender.x, sender.y, ft.x, ft.y);
+                            const travel = dist / C.PROJ_SPEED * 1000;
+                            const pid = `proj_${Date.now()}`;
+                            const sp = { type: 'spawn-projectile', projectileId: pid, casterId: senderId, targetId: ft.id, spellId: data.spellId, travelTime: travel };
+                            Net.broadcast(sp); Game.spawnProjectile(sp.projectileId, sp.casterId, sp.targetId, sp.spellId, sp.travelTime);
+                            setTimeout(() => {
+                                const ht = S.players[ft.id] || S.npcs[ft.id];
+                                if (!ht || ht.isDead) return;
+                                Combat.inCombat(sender); if (ht.name) Combat.inCombat(ht);
+                                Spells.resolve(sender, ht, data.spellId);
+                                Net.broadcast({ type: 'spell-effect', targetId: ht.id, spellId: data.spellId });
+                                if (Net.isHost()) FX.spell(ht.el, data.spellId);
+                            }, travel);
+                        }, spell.castTime);
+                        break;
+                    }
+                }
+            },
+            client: (data) => {
+                switch (data.type) {
+                    case 'sync-response': for (const id in data.players) if (id !== S.localId) Entities.createPlayer(id, data.players[id].name, false, data.players[id]); for (const id in data.npcs) Entities.createNpc(data.npcs[id]); for (const id in data.items) Entities.createItem(data.items[id]); break;
+                    case 'despawn-npc': { const n = S.npcs[data.id]; if (n && n.el) { n.el.style.opacity = '0'; setTimeout(() => Entities.removeNpc(data.id), 500); } break; }
+                    case 'new-player': if (data.id !== S.localId) { Entities.createPlayer(data.id, data.player.name, false, data.player); } else if (S.players[S.localId]) { const me = S.players[S.localId]; me.x = data.player.x; me.y = data.player.y; me.targetX = data.player.x; me.targetY = data.player.y; } break;
+                    case 'move': if (S.players[data.id] && data.id !== S.localId) { S.players[data.id].targetX = data.x; S.players[data.id].targetY = data.y; } break;
+                    case 'update-health': { const p = S.players[data.id]; if (p) { Util.trigger(p.el, 'damage-flash'); p.health = data.health; p.isDead = data.isDead; } break; }
+                    case 'update-gold': if (S.players[data.playerId]) S.players[data.playerId].gold = data.gold; break;
+                    case 'update-inv': if (S.players[data.playerId]) S.players[data.playerId].inv = data.inv; break;
+                    case 'chat': Chat.log(data.message, data.name); if (data.playerId && data.name !== 'system') Chat.bubble(data.playerId, data.message); break;
+                    case 'disconnect': Entities.removePlayer(data.id); break;
+                    case 'spawn-npc': Entities.createNpc(data.npc); break;
+                    case 'npc-cast': { const n = S.npcs[data.id]; if (n && n.el) n.el.classList.toggle('casting', data.casting); break; }
+                    case 'npc-move': if (S.npcs[data.id]) { S.npcs[data.id].x = data.x; S.npcs[data.id].y = data.y; } break;
+                    case 'npc-update-health': { const n = S.npcs[data.id]; if (n) { Util.trigger(n.el, 'damage-flash'); n.health = data.health; n.isDead = data.isDead; } break; }
+                    case 'spawn-item': Entities.createItem(data.item); break;
+                    case 'remove-item': Entities.removeItem(data.id); break;
+                    case 'combat-status': { const p = S.players[data.playerId]; if (p) { p.inCombat = data.inCombat; p.el.classList.toggle('in-combat', data.inCombat); } break; }
+                    case 'title-update': if (S.players[data.playerId]) S.players[data.playerId].title = data.title; break;
+                    case 'update-mana': if (S.players[data.playerId]) { S.players[data.playerId].mana = data.mana; if (data.playerId === S.localId) S.players[S.localId].mana = data.mana; } break;
+                    case 'cast-started': { const c = S.players[data.casterId]; if (c) { c.spellText.textContent = data.spell.words; c.spellText.style.opacity = '1'; c.spellText.style.marginBottom = '45px'; } break; }
+                    case 'cast-finished': { const c = S.players[data.casterId]; if (c) { c.spellText.style.opacity = '0'; c.spellText.style.marginBottom = '40px'; } break; }
+                    case 'spell-effect': { const el = (S.players[data.targetId] || {}).el || (S.npcs[data.targetId] || {}).el; if (el) FX.spell(el, data.spellId); break; }
+                    case 'spawn-projectile': Game.spawnProjectile(data.projectileId, data.casterId, data.targetId, data.spellId, data.travelTime); break;
+                    case 'fizzle': { const c = S.players[data.casterId]; if (c) FX.fizzle(c); break; }
+                    case 'buff-update': { const e = S.players[data.playerId] || S.npcs[data.playerId]; if (e) { if (!e.buffs) e.buffs = {}; e.buffs = data.buffs; } break; }
+                }
+            },
+            manaRegen: () => { if (!S.isHost) return; for (const id in S.players) { const p = S.players[id]; if (!p.isDead && p.mana < p.maxMana) { p.mana = Math.min(p.maxMana, p.mana + C.MANA_REGEN); Net.broadcast({ type: 'update-mana', playerId: id, mana: p.mana }); } } },
+            leaderboard: () => {
+                if (!S.isHost) return;
+                const sorted = Object.values(S.players).sort((a, b) => b.gold - a.gold);
+                let m = '--- Top Brawlers (by Gold) ---';
+                if (!sorted.length) m += '\nNo brawlers yet!';
+                else sorted.slice(0, 5).forEach((p, i) => { m += `\n#${i + 1}: ${p.name}${p.title ? ' ' + p.title : ''} - ${p.gold}g`; });
+                Combat.announce(m);
+            }
+        };
+        Combat.pickup = (p) => {
+            if (p.isDead) return;
+            const R = C.PLAYER_RADIUS + 5;
+            for (const id in S.items) {
+                const it = S.items[id];
+                if (Util.dist(p.x + C.PLAYER_RADIUS, p.y + C.PLAYER_RADIUS, it.x + C.GOLD_SIZE / 2, it.y + C.GOLD_SIZE / 2) < R) {
+                    if (it.type === 'gold') p.gold += it.amount;
+                    Entities.removeItem(id); Net.broadcast({ type: 'remove-item', id });
+                    Net.broadcast({ type: 'update-gold', playerId: p.id, gold: p.gold });
+                    Combat.announce(`${p.name} picked up ${it.amount} gold.`);
+                    break;
+                }
+            }
+        };
+
+        /* ============================ GAME ============================ */
+        const Game = {
+            finalize: (name) => {
+                D.login.style.display = 'none'; D.container.style.display = 'block';
+                Entities.createPlayer(S.localId, name, true);
+                if (S.isHost) {
+                    S.players[S.localId].isHost = true;
+                    for (let i = 0; i < C.MAX_NPCS; i++) Combat.spawnNpc();
+                    for (let i = 0; i < C.MAX_MAGES; i++) Combat.spawnMage();
+                } else {
+                    const h = S.conns[C.HOST_ID];
+                    if (h && h.open) Net.send({ type: 'sync-request', name });
+                }
+                Game.loop();
+            },
+            finalizeObserver: () => {
+                D.login.style.display = 'none'; D.container.style.display = 'block';
+                // No local player is created — observer roams the map as a free camera.
+                S.localId = S.localId || 'observer';
+                Chat.log('👁 You are now observing. You cannot attack, cast, or be targeted.', 'system');
+                const h = S.conns[C.HOST_ID];
+                if (h && h.open) Net.send({ type: 'observer-sync' });
+                // Banner + lock combat UI
+                Game.applyObserverLock();
+                Game.loop();
+            },
+            applyObserverLock: () => {
+                // Hide/disable combat controls; show spectator banner + controller.
+                if (D.vendorMenu) D.vendorMenu.style.display = 'none';
+                const banner = document.createElement('div');
+                banner.id = 'observer-banner';
+                banner.textContent = '👁 OBSERVING — you cannot interfere';
+                document.body.appendChild(banner);
+                Obs.show();
+            },
+            spawnProjectile: (id, casterId, targetId, spellId, travel) => {
+                if (S.projectiles[id]) return;
+                const caster = S.players[casterId] || S.npcs[casterId], tgt = S.players[targetId] || S.npcs[targetId];
+                if (!caster || !tgt) return;
+                const el = Util.make('spell-projectile', D.worldC);
+                const vis = { magic_arrow: ['➤', '#e0aaff'], lightning: ['⚡', '#f0e68c'], flamestrike: ['🔥', '#ff6a00'], poison: ['●', '#4CAF50'] };
+                el.textContent = (vis[spellId] || ['•', '#fff'])[0]; el.style.color = (vis[spellId] || ['•', '#fff'])[1];
+                const sx = caster.x + C.PLAYER_RADIUS, sy = caster.y + C.PLAYER_RADIUS;
+                el.style.left = sx + 'px'; el.style.top = sy + 'px';
+                S.projectiles[id] = { id, el, spellId, sx, sy, ex: tgt.x + C.PLAYER_RADIUS, ey: tgt.y + C.PLAYER_RADIUS, targetId, start: Date.now(), travel };
+                setTimeout(() => { el.remove(); delete S.projectiles[id]; }, travel + 100);
+            },
+            updateProjectiles: () => {
+                const now = Date.now();
+                for (const id in S.projectiles) {
+                    const p = S.projectiles[id]; const t = S.players[p.targetId] || S.npcs[p.targetId];
+                    const tx = t ? t.x + C.PLAYER_RADIUS : p.ex, ty = t ? t.y + C.PLAYER_RADIUS : p.ey;
+                    const f = Math.min(1, (now - p.start) / p.travel);
+                    p.x = p.sx + (tx - p.sx) * f; p.y = p.sy + (ty - p.sy) * f;
+                    p.el.style.left = p.x + 'px'; p.el.style.top = p.y + 'px';
+                }
+            },
+            camera: () => {
+                const me = S.players[S.localId];
+                const vw = parseInt(getComputedStyle(D.world).width), vh = parseInt(getComputedStyle(D.world).height);
+                const z = S.obsZoom || 1;
+                if (S.observer) {
+                    // Effective visible area scales inversely with zoom. Center on obsX/obsY.
+                    const visW = vw / z, visH = vh / z;
+                    S.camX = Util.clamp(S.obsX - visW / 2, 0, Math.max(0, C.WORLD_W - visW));
+                    S.camY = Util.clamp(S.obsY - visH / 2, 0, Math.max(0, C.WORLD_H - visH));
+                    return;
+                }
+                if (!me) return;
+                S.camX = Util.clamp(me.x - vw / 2 + C.PLAYER_RADIUS, 0, C.WORLD_W - vw);
+                S.camY = Util.clamp(me.y - vh / 2 + C.PLAYER_RADIUS, 0, C.WORLD_H - vh);
+            },
+            boat: () => {
+                S.boatX += 0.5 * S.boatDir;
+                if (S.boatX > 2000 || S.boatX < 800) { S.boatDir *= -1; D.boat.style.transform = `scaleX(${S.boatDir})`; }
+                D.boat.style.left = S.boatX + 'px'; D.boat.style.top = S.boatY + 'px';
+            },
+            input: () => {
+                if (S.observer) {
+                    // Free-roam camera: WASD/arrows pan the observer viewpoint.
+                    let dx = 0, dy = 0;
+                    if (S.keys['w'] || S.keys['arrowup']) dy--; if (S.keys['s'] || S.keys['arrowdown']) dy++;
+                    if (S.keys['a'] || S.keys['arrowleft']) dx--; if (S.keys['d'] || S.keys['arrowright']) dx++;
+                    const mag = Math.hypot(dx, dy);
+                    if (mag >= 1) { const sp = C.BASE_SPEED * 1.6; S.obsX = Util.clamp(S.obsX + dx / mag * sp, 0, C.WORLD_W); S.obsY = Util.clamp(S.obsY + dy / mag * sp, 0, C.WORLD_H); }
+                    return;
+                }
+                const me = S.players[S.localId];
+                if (!me || document.activeElement === D.chatIn || D.vendorMenu.style.display === 'block') { if (S.moveMouse) S.moveMouse = false; return; }
+                let dx = 0, dy = 0;
+                if (S.moveMouse) { dx = S.mouseTarget.x - (me.x + C.PLAYER_RADIUS); dy = S.mouseTarget.y - (me.y + C.PLAYER_RADIUS); }
+                else { if (S.keys['w']) dy--; if (S.keys['s']) dy++; if (S.keys['a']) dx--; if (S.keys['d']) dx++; }
+                const mag = Math.hypot(dx, dy);
+                if (mag < 1) return;
+                const sp = me.buffs.speed.active ? C.BASE_SPEED * 1.5 : C.BASE_SPEED;
+                let nx, ny;
+                if (S.moveMouse) { const d = Math.min(mag, sp); nx = me.x + dx / mag * d; ny = me.y + dy / mag * d; }
+                else { nx = me.x + dx / mag * sp; ny = me.y + dy / mag * sp; }
+                if (Util.inWater(nx, me.y)) nx = me.x; if (Util.inWater(me.x, ny)) ny = me.y;
+                if (!me.isDead) {
+                    for (const id in S.players) { const o = S.players[id]; if (id === S.localId || o.isDead) continue; if (Util.dist(nx + C.PLAYER_RADIUS, me.y + C.PLAYER_RADIUS, o.x + C.PLAYER_RADIUS, o.y + C.PLAYER_RADIUS) < C.PLAYER_SIZE) nx = me.x; if (Util.dist(me.x + C.PLAYER_RADIUS, ny + C.PLAYER_RADIUS, o.x + C.PLAYER_RADIUS, o.y + C.PLAYER_RADIUS) < C.PLAYER_SIZE) ny = me.y; }
+                    for (const b of C.BUILDINGS) { if (Util.inBuilding(nx, me.y)) nx = me.x; if (Util.inBuilding(me.x, ny)) ny = me.y; }
+                }
+                const ox = me.x, oy = me.y;
+                me.x = Util.clamp(nx, 0, C.WORLD_W - C.PLAYER_SIZE); me.y = Util.clamp(ny, 0, C.WORLD_H - C.PLAYER_SIZE);
+                if (me.x !== ox || me.y !== oy) Net.send({ type: 'move', x: me.x, y: me.y });
+            },
+            autoAttack: () => {
+                if (S.observer) return;
+                if (!S.autoAttack || !S.targetId || S.attackCD) return;
+                const me = S.players[S.localId];
+                const tgt = S.players[S.targetId] || S.npcs[S.targetId];
+                if (!me || me.isDead || !tgt || tgt.isDead) { Game.clearTarget(); return; }
+                const d = Util.dist(me.x + C.PLAYER_RADIUS, me.y + C.PLAYER_RADIUS, tgt.x + C.PLAYER_RADIUS, tgt.y + C.PLAYER_RADIUS);
+                if (d <= C.ATTACK_RANGE) Combat.attack(S.targetId, tgt.name ? 'player' : 'npc', true);
+            },
+            castKey: (key) => {
+                if (Game.observerBlocked()) return;
+                if (!S.targetId) { Chat.log('You must have a target to cast a spell.', 'system'); return; }
+                const id = Spells.byKey(key); if (id) Net.send({ type: 'start-cast', spellId: id, targetId: S.targetId });
+            },
+            clickWorld: (e) => {
+                const me = S.players[S.localId]; if (!me || me.isDead) return;
+                if (S.observer) { S.moveMouse = false; return; } // observers roam; cannot target
+                const r = D.world.getBoundingClientRect();
+                const cx = e.clientX - r.left + S.camX, cy = e.clientY - r.top + S.camY;
+                const dv = Util.dist(cx, cy, C.VENDOR_X + C.VENDOR_SIZE / 2, C.VENDOR_Y + C.VENDOR_SIZE / 2);
+                if (dv < C.VENDOR_SIZE / 2) {
+                    const dp = Util.dist(me.x + C.PLAYER_RADIUS, me.y + C.PLAYER_RADIUS, C.VENDOR_X + C.VENDOR_SIZE / 2, C.VENDOR_Y + C.VENDOR_SIZE / 2);
+                    if (dp < C.VENDOR_RANGE) D.vendorMenu.style.display = 'block'; else Chat.log('You are too far away from the vendor.', 'system');
+                    S.moveMouse = false; return;
+                }
+                let fid = null, fname = '';
+                for (const id in S.players) { const p = S.players[id]; if (id !== S.localId && !p.isDead && cx >= p.x && cx <= p.x + C.PLAYER_SIZE && cy >= p.y && cy <= p.y + C.PLAYER_SIZE) { fid = id; fname = p.name; break; } }
+                if (!fid) for (const id in S.npcs) { const n = S.npcs[id]; if (!n.isDead && cx >= n.x && cx <= n.x + C.PLAYER_SIZE && cy >= n.y && cy <= n.y + C.PLAYER_SIZE) { fid = id; fname = 'a slime'; break; } }
+                if (fid) { S.moveMouse = false; S.targetId = fid; S.autoAttack = true; Chat.log(`You begin attacking ${fname}.`, 'system'); }
+                else { if (S.autoAttack) Chat.log('You are no longer attacking.', 'system'); S.autoAttack = false; }
+            },
+            cycleTarget: () => {
+                if (Game.observerBlocked()) return;
+                const me = S.players[S.localId]; if (!me) return;
+                const all = Object.values(S.players).concat(Object.values(S.npcs));
+                const valid = all.filter(t => t.id !== S.localId && !t.isDead && !Util.inSafe(t.x)).map(t => ({ id: t.id, name: t.name, dist: Util.dist(me.x, me.y, t.x, t.y) })).filter(t => t.dist < 400).sort((a, b) => a.dist - b.dist);
+                if (!valid.length) { Game.clearTarget(); return; }
+                const i = valid.findIndex(t => t.id === S.targetId);
+                const next = valid[(i + 1) % valid.length];
+                S.targetId = next.id; S.autoAttack = true;
+                Chat.log(`You begin attacking ${next.name || 'a slime'}.`, 'system');
+            },
+            clearTarget: () => { if (S.autoAttack) Chat.log('You are no longer attacking.', 'system'); S.autoAttack = false; S.targetId = null; },
+            observerBlocked: () => { if (S.observer) { Chat.log('👁 Observers cannot attack or cast.', 'system'); return true; } return false; },
+            UI: () => {
+                D.worldC.style.transform = `translate(${-S.camX}px, ${-S.camY}px) scale(${S.obsZoom})`;
+                document.querySelectorAll('.targeted-entity').forEach(el => el.classList.remove('targeted-entity'));
+                for (const id in S.players) {
+                    const p = S.players[id];
+                    p.el.style.left = p.x + 'px'; p.el.style.top = p.y + 'px';
+                    p.nameTag.textContent = `${p.isHost ? '👑 ' : ''}${p.name} ${p.title || ''}`.trim();
+                    p.healthInner.style.width = (p.health / C.MAX_HEALTH) * 100 + '%';
+                    p.el.classList.toggle('ghost', p.isDead);
+                    p.el.classList.toggle('speed-buff', p.buffs.speed.active);
+                    p.el.classList.toggle('damage-buff', p.buffs.damage.active);
+                    p.el.classList.toggle('poisoned', p.buffs.poison.active);
+                }
+                for (const id in S.npcs) { const n = S.npcs[id]; if (!n.el) continue; n.el.style.left = n.x + 'px'; n.el.style.top = n.y + 'px'; n.healthInner.style.width = (n.health / n.maxHealth) * 100 + '%'; n.el.classList.toggle('ghost', n.isDead); n.el.classList.toggle('poisoned', n.buffs.poison.active); }
+                for (const id in S.items) { const it = S.items[id]; if (it.el) { it.el.style.left = it.x + 'px'; it.el.style.top = it.y + 'px'; } }
+                if (S.targetId) { const t = S.players[S.targetId] || S.npcs[S.targetId]; if (t && !t.isDead) { t.el.classList.add('targeted-entity'); D.tgtDisplay.style.display = 'block'; D.tgtName.textContent = (t.name || 'a slime') + ' ' + Math.max(0, Math.ceil(t.health)) + '/' + (t.maxHealth || C.MAX_HEALTH); D.tgtBar.style.width = (t.health / (t.maxHealth || C.MAX_HEALTH)) * 100 + '%'; } else Game.clearTarget(); }
+                else D.tgtDisplay.style.display = 'none';
+                const me = S.players[S.localId];
+                if (me) { D.gold.textContent = `Gold: ${me.gold}`; D.mana.textContent = `Mana: ${Math.floor(me.mana)}`; D.inv.textContent = `Pots: H[${me.inv.health_potion}] S[${me.inv.speed_potion}] D[${me.inv.damage_potion}]`; }
+            },
+            poison: () => {
+                if (!S.isHost) return;
+                const now = Date.now();
+                const all = Object.values(S.players).concat(Object.values(S.npcs));
+                for (const e of all) {
+                    if (!e.buffs || !e.buffs.poison.active) continue;
+                    const pd = e.buffs.poison;
+                    if (now > pd.endTime) { pd.active = false; if (e.name) Combat.msgPlayer(e.id, 'The poison has worn off.'); Net.broadcast({ type: 'buff-update', playerId: e.id, buffs: e.buffs }); continue; }
+                    if (now - pd.lastTick >= pd.tickInt) {
+                        pd.lastTick = now; if (e.isDead) continue;
+                        e.health = Math.max(0, e.health - pd.tickDmg); Util.trigger(e.el, 'damage-flash');
+                        if (e.name) Combat.msgPlayer(e.id, `You take ${pd.tickDmg} damage from poison.`);
+                        if (e.isCasting) Combat.interrupt(e, 'interrupted by poison');
+                        if (e.health <= 0) {
+                            e.isDead = true; const tn = e.name || 'a slime'; const caster = S.players[pd.casterId];
+                            Combat.announce(`${tn} has succumbed to poison!`);
+                            if (e.name) { e.deaths++; Combat.awardTitle(e); if (caster) { caster.pvpKills++; Combat.awardTitle(caster); } Combat.playerDeath(e, caster || { id: 'npc_poison' }); }
+                            else { if (caster) { caster.pveKills++; Combat.awardTitle(caster); } Combat.dropSlimeGold(e); }
+                        }
+                        Net.broadcast({ type: e.name ? 'update-health' : 'npc-update-health', id: e.id, health: e.health, isDead: e.isDead });
+                    }
+                }
+            },
+            buffs: () => {
+                if (!S.isHost) return;
+                const now = Date.now();
+                for (const id in S.players) { const p = S.players[id]; for (const b in p.buffs) { if (b === 'poison') continue; const bf = p.buffs[b]; if (bf.active && now > bf.endTime) { bf.active = false; Combat.msgPlayer(id, `Your ${b.replace('_', ' ')} potion has worn off.`); Net.broadcast({ type: 'buff-update', playerId: id, buffs: p.buffs }); } } }
+            },
+            loop: () => {
+                Game.input();
+                Game.autoAttack();
+                if (S.isHost) { Combat.npcAI(); Combat.resurrect(); Combat.tickCombat(); Combat.idle(); Game.buffs(); Game.poison(); }
+                for (const id in S.players) { if (id === S.localId) continue; const p = S.players[id]; p.x += (p.targetX - p.x) * C.INTERP; p.y += (p.targetY - p.y) * C.INTERP; }
+                Game.boat(); Game.updateProjectiles(); Game.camera(); Game.UI();
+                requestAnimationFrame(Game.loop);
+            }
+        };
+
+        /* ============================ MOBILE ============================ */
+        const Mobile = {
+            init: () => {
+                const joy = Util.el('joy'), knob = Util.el('joyKnob');
+                let jid = null, jcx = 0, jcy = 0;
+                const setMove = (dx, dy) => {
+                    const m = Math.hypot(dx, dy); if (m < 8) { S.keys['w'] = S.keys['a'] = S.keys['s'] = S.keys['d'] = false; knob.style.transform = 'translate(0,0)'; return; }
+                    const ang = Math.atan2(dy, dx); knob.style.transform = `translate(${Math.cos(ang) * 24}px, ${Math.sin(ang) * 24}px)`;
+                    S.keys['w'] = dy < -8; S.keys['s'] = dy > 8; S.keys['a'] = dx < -8; S.keys['d'] = dx > 8;
+                };
+                const start = (e) => { const t = e.changedTouches ? e.changedTouches[0] : e; jid = t.identifier; const r = joy.getBoundingClientRect(); jcx = r.left + r.width / 2; jcy = r.top + r.height / 2; setMove(t.clientX - jcx, t.clientY - jcy); e.preventDefault(); };
+                const move = (e) => { for (const t of (e.changedTouches || [e])) if (t.identifier === jid) { setMove(t.clientX - jcx, t.clientY - jcy); e.preventDefault(); } };
+                const end = (e) => { for (const t of (e.changedTouches || [e])) if (t.identifier === jid) { jid = null; setMove(0, 0); } };
+                joy.addEventListener('touchstart', start, { passive: false }); joy.addEventListener('touchmove', move, { passive: false }); joy.addEventListener('touchend', end); joy.addEventListener('touchcancel', end);
+                const hold = (id, on, off) => { const b = Util.el(id); const dn = (e) => { on(); e.preventDefault(); }; const up = (e) => { if (off) off(); e.preventDefault(); }; b.addEventListener('touchstart', dn, { passive: false }); b.addEventListener('touchend', up); };
+                hold('mobAtk', () => { if (!S.targetId) Game.cycleTarget(); S.autoAttack = true; }, () => { S.autoAttack = false; });
+                hold('mobTgt', () => Game.cycleTarget());
+                hold('mobSp1', () => Game.castKey('1'));
+                hold('mobSp2', () => Game.castKey('2'));
+                hold('mobSp3', () => Game.castKey('3'));
+                hold('mobSp4', () => Game.castKey('4'));
+            }
+        };
+
+        /* ============================ OBSERVER CONTROLLER ============================ */
+        const Obs = {
+            init: () => {
+                const press = (k) => { S.keys[k] = true; };
+                const release = (k) => { S.keys[k] = false; };
+                const bind = (id, key) => {
+                    const b = Util.el(id);
+                    const dn = (e) => { e.preventDefault(); press(key); b.classList.add('active'); };
+                    const up = (e) => { e.preventDefault(); release(key); b.classList.remove('active'); };
+                    b.addEventListener('pointerdown', dn);
+                    b.addEventListener('pointerup', up);
+                    b.addEventListener('pointerleave', up);
+                    b.addEventListener('pointercancel', up);
+                };
+                bind('obs-up', 'w'); bind('obs-down', 's'); bind('obs-left', 'a'); bind('obs-right', 'd');
+                D.obsFit.addEventListener('click', () => {
+                    const vw = D.world.clientWidth, vh = D.world.clientHeight;
+                    const z = Math.min(vw / C.WORLD_W, vh / C.WORLD_H); // fit whole map
+                    S.obsZoom = z; S.obsX = C.WORLD_W / 2; S.obsY = C.WORLD_H / 2;
+                    D.obsFit.classList.add('on'); D.obsReset.classList.remove('on');
+                });
+                D.obsReset.addEventListener('click', () => {
+                    S.obsZoom = 1; D.obsFit.classList.remove('on'); D.obsReset.classList.add('on');
+                });
+            },
+            show: () => { D.obsControls.classList.add('active'); D.obsReset.classList.add('on'); }
+        };
+
+        /* ============================ INIT ============================ */
+        function init() {
+            D.joinBtn.addEventListener('click', () => {
+                const name = D.nameInput.value || `Player_${Math.floor(Math.random() * 1000)}`;
+                D.joinBtn.disabled = true; Net.connect(name);
+            });
+            D.observeBtn.addEventListener('click', () => {
+                D.observeBtn.disabled = true; Net.observe();
+            });
+            D.chatIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); const m = D.chatIn.value; if (m) { Net.send({ type: 'chat', message: m }); D.chatIn.value = ''; D.chatIn.blur(); } } });
+            window.addEventListener('keydown', (e) => { const k = e.key.toLowerCase(); S.keys[k] = true; Game.key(k, e); });
+            window.addEventListener('keyup', (e) => { S.keys[e.key.toLowerCase()] = false; });
+            D.world.addEventListener('click', Game.clickWorld);
+            D.world.addEventListener('contextmenu', (e) => e.preventDefault());
+            D.world.addEventListener('mousedown', (e) => { if (e.button !== 0) return; const me = S.players[S.localId]; if (!me || document.activeElement === D.chatIn || D.vendorMenu.style.display === 'block') return; S.mouseDown = true; Mobile.setMouse(e); S.moveMouse = true; });
+            window.addEventListener('mouseup', (e) => { if (e.button !== 0) return; S.mouseDown = false; S.moveMouse = false; });
+            D.world.addEventListener('mousemove', (e) => { if (S.mouseDown) { Mobile.setMouse(e); S.moveMouse = true; } });
+            D.closeVendor.addEventListener('click', () => { D.vendorMenu.style.display = 'none'; });
+            document.querySelectorAll('.buy-btn').forEach(b => b.addEventListener('click', () => Net.send({ type: 'buy-item', itemId: b.dataset.item })));
+            Mobile.init();
+            Obs.init();
+            D.status.textContent = 'Ready. Enter a name and join.';
+        }
+        Mobile.setMouse = (e) => { const r = D.world.getBoundingClientRect(); S.mouseTarget.x = e.clientX - r.left + S.camX; S.mouseTarget.y = e.clientY - r.top + S.camY; };
+        Game.key = (k, e) => {
+            const me = S.players[S.localId];
+            if (!me || me.isDead || document.activeElement === D.chatIn || D.vendorMenu.style.display === 'block') return;
+            if (k === 'enter') { D.chatIn.focus(); S.keys['enter'] = false; return; }
+            switch (k) {
+                case '1': case '2': case '3': case '4': if (S.targetId) Game.castKey(k); else Chat.log('You must have a target to cast a spell.', 'system'); break;
+                case '6': Net.send({ type: 'use-item', itemId: 'health_potion' }); break;
+                case 'tab': e.preventDefault(); Game.cycleTarget(); break;
+                case 'escape': e.preventDefault(); Game.clearTarget(); break;
+            }
+        };
+
+        // debug exposure (harmless; for QA)
+        window.UOB = { C, Util, S, Game, Net, Combat, Entities, Spells, Mobile, _init: init };
+        init();
+    })();
+    </script>
 </body>
 </html>
